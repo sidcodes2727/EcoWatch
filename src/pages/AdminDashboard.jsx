@@ -99,7 +99,7 @@ export default function AdminDashboard() {
   const fetchReports = async () => {
     const { data, error } = await supabase
       .from('waste_reports')
-      .select('*, bins(bin_code, location_name), profiles(full_name)')
+      .select('*, bins(bin_code, location_name), reporter:profiles!reporter_id(full_name)')
       .order('created_at', { ascending: false })
       .limit(50)
 
@@ -709,7 +709,7 @@ export default function AdminDashboard() {
                       {report.bins?.bin_code}
                     </td>
                     <td className="px-4 py-3.5 text-sm text-gray-600">
-                      {report.profiles?.full_name || 'Unknown'}
+                      {report.reporter?.full_name || 'N/A'}
                     </td>
                     <td className="px-4 py-3.5 text-sm">
                       <div className="flex items-center gap-2">
