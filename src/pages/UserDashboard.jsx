@@ -254,7 +254,7 @@ export default function UserDashboard() {
         priority = 2
       }
 
-      console.log(`📋 Creating cleaning task with priority ${priority} for bin ${nearestBin.bin_code}`)
+      console.log(`Creating cleaning task with priority ${priority} for bin ${nearestBin.bin_code}`)
 
       const { error: taskError } = await supabase.from('cleaning_tasks').insert({
         bin_id: nearestBin.id,
@@ -267,7 +267,7 @@ export default function UserDashboard() {
       if (taskError) {
         console.error('Error creating task:', taskError)
       } else {
-        console.log('✅ Cleaning task created successfully')
+        console.log('Cleaning task created successfully')
       }
 
       setSuccess('Report submitted successfully!')

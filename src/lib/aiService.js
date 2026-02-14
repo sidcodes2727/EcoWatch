@@ -13,7 +13,7 @@ export async function analyzeWasteImage(imageFile) {
 
     // Try the latest Gemini Flash model first (faster and more reliable)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash-latest'
+      model: 'gemini-2.0-flash'
     })
 
     // Convert image to base64
@@ -95,10 +95,10 @@ IMPORTANT: If the bin looks FULL, give it 80-100% fill percentage. Be HONEST abo
 
     // Try fallback to older model
     try {
-      console.log('🔄 Trying fallback model: gemini-1.5-pro...')
+      console.log('🔄 Trying fallback model: gemini-1.5-flash...')
 
       const fallbackModel = genAI.getGenerativeModel({
-        model: 'gemini-1.5-pro'
+        model: 'gemini-1.5-flash'
       })
 
       const base64Image = await fileToBase64(imageFile)
@@ -134,28 +134,9 @@ IMPORTANT: If the bin looks FULL, give it 80-100% fill percentage. Be HONEST abo
       console.error('❌ Fallback model also failed:', fallbackError.message)
     }
 
-    // FINAL FALLBACK: Return mock data for demo
-    console.warn('⚠️ All AI models unavailable - Using simulated analysis for demo')
-    console.warn('💡 This is expected if API key is invalid or quota exceeded')
-
-    // Generate more realistic mock data with varied fill levels
-    const mockFill = Math.floor(Math.random() * 100) // 0-100% for variety
-    const mockSeverity = mockFill > 70 ? 'high' : mockFill > 40 ? 'medium' : 'low'
-    const wasteTypes = ['Mixed Waste', 'Plastic Bottles', 'Paper & Cardboard', 'General Waste', 'Recyclables', 'Food Waste']
-    const mockType = wasteTypes[Math.floor(Math.random() * wasteTypes.length)]
-
-    return {
-      fillPercentage: mockFill,
-      severity: mockSeverity,
-      wasteType: mockType,
-      confidence: 75,
-      observations: `Simulated analysis: Bin appears ${mockSeverity === 'high' ? 'nearly full' : mockSeverity === 'medium' ? 'partially filled' : 'mostly empty'} with ${mockType.toLowerCase()}. ${mockSeverity === 'high' ? 'Urgent cleaning needed' : mockSeverity === 'medium' ? 'Schedule cleaning soon' : 'Low priority'}.`,
-      rawResponse: {
-        mock: true,
-        reason: 'AI API unavailable',
-        originalError: error.message
-      }
-    }
+    // Surface the error so the caller can handle it (e.g., show manual fill input)
+    console.error('⚠️ All AI models unavailable - API key may be invalid or quota exceeded')
+    throw new Error('AI analysis unavailable. Please estimate fill level manually.')
   }
 }
 
@@ -193,7 +174,7 @@ export async function verifyCleaningImage(imageFile) {
     console.log('🧹 Verifying bin cleanliness with AI...')
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash-latest'
+      model: 'gemini-2.0-flash'
     })
 
     const base64Image = await fileToBase64(imageFile)
@@ -247,20 +228,8 @@ Be STRICT: If you see ANY significant waste or the bin is not empty, set isClean
   } catch (error) {
     console.error('❌ Error verifying cleaning:', error.message)
 
-    // FALLBACK: For demo, randomly accept/reject to simulate real behavior
-    console.warn('⚠️ AI verification unavailable - Using simulated verification for demo')
-
-    const randomFill = Math.floor(Math.random() * 30) // 0-30%
-    const isCleaned = randomFill < 15
-
-    return {
-      isCleaned: isCleaned,
-      fillPercentage: randomFill,
-      confidence: 85,
-      notes: isCleaned
-        ? `Simulated verification: Bin appears clean (${randomFill}% full).`
-        : `Simulated verification: Bin is still ${randomFill}% full. Please clean properly before submitting.`
-    }
+    console.error('⚠️ AI verification unavailable - API key may be invalid or quota exceeded')
+    throw new Error('AI verification unavailable. Please try again later.')
   }
 }
 
@@ -272,7 +241,7 @@ export async function compareImages(originalImageUrl, completionImageFile) {
     console.log('🔄 Comparing images with AI...')
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash-latest'
+      model: 'gemini-2.0-flash'
     })
 
     // Fetch the original image

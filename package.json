@@ -10,7 +10,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@google/generative-ai": "^0.2.1",
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.39.3",
     "date-fns": "^3.2.0",
     "leaflet": "^1.9.4",
