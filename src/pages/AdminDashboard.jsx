@@ -1,35 +1,19 @@
 import { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import Map, { Marker, Popup, NavigationControl } from 'react-map-gl/maplibre'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getWasteTrends, checkAllBinsPredictions, generateDailySchedule, createScheduledTasks } from '../lib/predictionEngine'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { Activity, TrendingUp, AlertTriangle, CheckCircle, MapPin, Calendar, Clock, Zap, Leaf, LogOut, Loader } from 'lucide-react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 
-// Fix Leaflet default marker icon
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-})
-
-// Custom dustbin marker icons
-const createIcon = (color) =>
-  L.divIcon({
-    className: 'custom-marker',
-    html: `<div style="filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 20]
-  })
-
-const severityIcons = {
-  low: createIcon('#10b981'),
-  medium: createIcon('#f59e0b'),
-  high: createIcon('#ef4444'),
-  predicted_overflow: createIcon('#ff6b35')
+const getSeverityMarkerColor = (severity) => {
+  switch (severity) {
+    case 'high': return '#ef4444'
+    case 'medium': return '#f59e0b'
+    case 'predicted_overflow': return '#ff6b35'
+    default: return '#10b981'
+  }
 }
 
 export default function AdminDashboard() {
@@ -442,46 +426,73 @@ export default function AdminDashboard() {
           </div>
 
           <div className="h-[500px] rounded-2xl overflow-hidden border border-gray-200">
-            <MapContainer
-              center={campusCenter}
-              zoom={16}
-              style={{ height: '100%', width: '100%' }}
+            <Map
+              initialViewState={{
+                longitude: campusCenter[1],
+                latitude: campusCenter[0],
+                zoom: 16,
+                pitch: 55,
+                bearing: -20
+              }}
+              style={{ width: '100%', height: '100%' }}
+              mapStyle="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"
             >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
+              <NavigationControl position="top-right" visualizePitch />
 
-              {bins.map((bin) => (
-                <Marker
-                  key={bin.id}
-                  position={[bin.latitude, bin.longitude]}
-                  icon={severityIcons[bin.current_severity]}
-                  eventHandlers={{
-                    click: () => setSelectedBin(bin)
-                  }}
-                >
-                  <Popup>
-                    <div className="p-2">
-                      <h3 className="font-bold text-lg mb-1">{bin.bin_code}</h3>
-                      <p className="text-sm text-gray-600 mb-2">{bin.location_name}</p>
-                      <div className="space-y-1 text-sm">
-                        <p>Fill: <span className="font-medium">{bin.current_fill_percentage.toFixed(0)}%</span></p>
-                        <p>Severity: <span className={`font-medium uppercase ${getSeverityColor(bin.current_severity)}`}>
-                          {bin.current_severity.replace('_', ' ')}
-                        </span></p>
-                        <p>Department: <span className="font-medium">{bin.department}</span></p>
-                        {bin.last_cleaned_at && (
-                          <p className="text-xs text-gray-500">
-                            Last cleaned: {new Date(bin.last_cleaned_at).toLocaleString()}
-                          </p>
-                        )}
-                      </div>
+              {bins.map((bin) => {
+                const markerColor = getSeverityMarkerColor(bin.current_severity)
+                return (
+                  <Marker
+                    key={bin.id}
+                    longitude={bin.longitude}
+                    latitude={bin.latitude}
+                    anchor="bottom"
+                    onClick={(e) => {
+                      e.originalEvent.stopPropagation()
+                      setSelectedBin(bin)
+                    }}
+                  >
+                    <div style={{ cursor: 'pointer', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill={markerColor} stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18"/>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                        <line x1="10" y1="11" x2="10" y2="17"/>
+                        <line x1="14" y1="11" x2="14" y2="17"/>
+                      </svg>
                     </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
+                  </Marker>
+                )
+              })}
+
+              {selectedBin && (
+                <Popup
+                  longitude={selectedBin.longitude}
+                  latitude={selectedBin.latitude}
+                  anchor="bottom"
+                  offset={28}
+                  closeOnClick={false}
+                  onClose={() => setSelectedBin(null)}
+                >
+                  <div className="p-1">
+                    <h3 className="font-bold text-lg mb-1">{selectedBin.bin_code}</h3>
+                    <p className="text-sm text-gray-600 mb-2">{selectedBin.location_name}</p>
+                    <div className="space-y-1 text-sm">
+                      <p>Fill: <span className="font-medium">{selectedBin.current_fill_percentage.toFixed(0)}%</span></p>
+                      <p>Severity: <span className={`font-medium uppercase ${getSeverityColor(selectedBin.current_severity)}`}>
+                        {selectedBin.current_severity.replace('_', ' ')}
+                      </span></p>
+                      <p>Department: <span className="font-medium">{selectedBin.department}</span></p>
+                      {selectedBin.last_cleaned_at && (
+                        <p className="text-xs text-gray-500">
+                          Last cleaned: {new Date(selectedBin.last_cleaned_at).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Popup>
+              )}
+            </Map>
           </div>
         </div>
 
