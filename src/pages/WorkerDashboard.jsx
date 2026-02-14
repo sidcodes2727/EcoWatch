@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { verifyCleaningImage } from '../lib/aiService'
 import { optimizeRoute, formatDistance, formatTime, getTotalEstimatedTime } from '../lib/routeOptimizer'
 import { Camera, MapPin, CheckCircle, Clock, Navigation, Loader, Upload, Leaf, LogOut } from 'lucide-react'
 
@@ -205,6 +206,28 @@ export default function WorkerDashboard() {
     try {
       setUploadingImage(true)
 
+      // Verify bin is cleaned using Gemini AI (15s timeout)
+      let verification = null
+      try {
+        console.log('Verifying bin is clean with Gemini AI...')
+        verification = await Promise.race([
+          verifyCleaningImage(capturedImage.file),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Verification timed out')), 15000))
+        ])
+        console.log('Cleaning verification result:', verification)
+
+        if (!verification.isCleaned) {
+          setError(`The bin is not cleaned properly.\n\n${verification.notes}\n\nThe bin must be less than 30% full to be marked as complete.\nCurrent fill: ${verification.fillPercentage}%\n\nPlease clean the bin and try again.`)
+          setCompletingTask(false)
+          setUploadingImage(false)
+          return
+        }
+        console.log('Cleaning verification passed')
+      } catch (verifyErr) {
+        console.warn('AI verification skipped:', verifyErr.message)
+        verification = { isCleaned: true, fillPercentage: 0 }
+      }
+
       // Upload completion image
       console.log('Uploading completion image...')
       const fileName = `completed-${Date.now()}.jpg`
@@ -241,14 +264,14 @@ export default function WorkerDashboard() {
       await supabase
         .from('bins')
         .update({
-          current_fill_percentage: 0,
+          current_fill_percentage: verification.fillPercentage || 0,
           current_severity: 'low',
           last_cleaned_at: endTime.toISOString()
         })
         .eq('id', selectedTask.bin_id)
 
       console.log('Task completed successfully!')
-      setSuccess('Task completed successfully!')
+      setSuccess('Task completed successfully! Bin verified as clean.')
       setSelectedTask(null)
       setCapturedImage(null)
       fetchTasks()

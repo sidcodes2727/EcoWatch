@@ -182,7 +182,7 @@ export async function verifyCleaningImage(imageFile) {
     const prompt = `You are a strict waste management inspector. Analyze this waste bin image and determine if it has been PROPERLY cleaned.
 
 STRICT CRITERIA - A bin is considered CLEANED only if:
-- The bin appears EMPTY or nearly empty (less than 15% full)
+- The bin appears EMPTY or mostly empty (less than 30% full)
 - No visible waste, trash, or debris remains
 - The bin looks visibly clean (not dirty or filled)
 
@@ -218,10 +218,10 @@ Be STRICT: If you see ANY significant waste or the bin is not empty, set isClean
 
     console.log('✅ Verification result:', verification)
 
-    // Additional validation: reject if fill > 15%
-    if (verification.fillPercentage > 15) {
+    // Additional validation: reject if fill > 30%
+    if (verification.fillPercentage > 30) {
       verification.isCleaned = false
-      verification.notes = `Bin is ${verification.fillPercentage}% full. Must be less than 15% to be considered clean.`
+      verification.notes = `Bin is ${verification.fillPercentage}% full. Must be less than 30% to be considered clean.`
     }
 
     return verification
