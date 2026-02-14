@@ -9,34 +9,48 @@ const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
  */
 export async function analyzeWasteImage(imageFile) {
   try {
-    // Use the most compatible model
+    console.log('🤖 Starting AI analysis with Gemini...')
+
+    // Try the latest Gemini Flash model first (faster and more reliable)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-pro-vision'
+      model: 'gemini-1.5-flash-latest'
     })
 
     // Convert image to base64
     const base64Image = await fileToBase64(imageFile)
 
-    const prompt = `You are an AI waste management expert. Analyze this waste bin image and provide:
+    const prompt = `You are an expert waste management AI inspector. Analyze this waste bin image with STRICT ACCURACY.
 
-1. Fill Percentage: Estimate how full the bin is (0-100%)
-2. Severity Level: Based on fill percentage:
-   - Low: 0-40% (bin is mostly empty)
-   - Medium: 41-70% (bin is partially full)
-   - High: 71-100% (bin is nearly full or overflowing)
-3. Waste Type: Identify the primary type of waste (e.g., "Mixed Waste", "Plastic", "Paper", "Organic", "Electronic", etc.)
-4. Confidence: Your confidence in the analysis (0-100%)
+CRITICAL INSTRUCTIONS:
+1. Fill Percentage: Look CAREFULLY at how full the bin is:
+   - 0-10%: Nearly empty, just some debris at bottom
+   - 10-30%: Minimal waste, mostly empty
+   - 30-50%: Less than half full
+   - 50-70%: More than half full
+   - 70-85%: Almost full, nearing top
+   - 85-100%: Full to the brim or overflowing
 
-Respond ONLY with a valid JSON object in this exact format:
+   BE ACCURATE! If the bin is CLEARLY FULL (waste near the top), it should be 80-100%, NOT 60%!
+
+2. Severity Level:
+   - Low: 0-40% (mostly empty)
+   - Medium: 41-70% (partially full)
+   - High: 71-100% (nearly full or overflowing)
+
+3. Waste Type: Identify the primary waste type visible (e.g., "Mixed Waste", "Plastic Bottles", "Paper", "Food Waste", "General Waste")
+
+4. Confidence: How confident are you in this assessment? (0-100%)
+
+Respond with ONLY this JSON format (no other text):
 {
-  "fillPercentage": <number>,
+  "fillPercentage": <number 0-100>,
   "severity": "<low|medium|high>",
   "wasteType": "<string>",
-  "confidence": <number>,
-  "observations": "<brief description>"
+  "confidence": <number 0-100>,
+  "observations": "<describe what you see in the bin>"
 }
 
-Be accurate and conservative in your estimates. If the bin appears overflowing, set fill percentage to 100.`
+IMPORTANT: If the bin looks FULL, give it 80-100% fill percentage. Be HONEST about what you see!`
 
     const result = await model.generateContent([
       prompt,
@@ -51,13 +65,21 @@ Be accurate and conservative in your estimates. If the bin appears overflowing, 
     const response = await result.response
     const text = response.text()
 
+    console.log('✅ AI Response received:', text.substring(0, 200) + '...')
+
     // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      throw new Error('Failed to parse AI response')
+      throw new Error('Failed to parse AI response - no JSON found')
     }
 
     const analysis = JSON.parse(jsonMatch[0])
+
+    console.log('📊 AI Analysis Result:', {
+      fill: analysis.fillPercentage + '%',
+      severity: analysis.severity,
+      type: analysis.wasteType
+    })
 
     // Validate and normalize response
     return {
@@ -69,24 +91,70 @@ Be accurate and conservative in your estimates. If the bin appears overflowing, 
       rawResponse: analysis
     }
   } catch (error) {
-    console.error('Error analyzing image:', error)
+    console.error('❌ AI Error:', error.message)
 
-    // FALLBACK: Return mock data for demo
-    console.warn('⚠️ AI API unavailable - Using intelligent mock analysis for demo')
+    // Try fallback to older model
+    try {
+      console.log('🔄 Trying fallback model: gemini-1.5-pro...')
 
-    // Generate realistic mock data
-    const mockFill = 60 + Math.floor(Math.random() * 30) // 60-90%
-    const mockSeverity = mockFill < 70 ? 'medium' : 'high'
-    const wasteTypes = ['Mixed Waste', 'Plastic Bottles', 'Paper & Cardboard', 'General Waste', 'Recyclables']
+      const fallbackModel = genAI.getGenerativeModel({
+        model: 'gemini-1.5-pro'
+      })
+
+      const base64Image = await fileToBase64(imageFile)
+
+      const result = await fallbackModel.generateContent([
+        `Analyze this waste bin image. Return JSON with: fillPercentage (0-100), severity (low/medium/high), wasteType, confidence (0-100), observations. Be accurate about fill level - if bin is clearly full, use 80-100%.`,
+        {
+          inlineData: {
+            data: base64Image,
+            mimeType: imageFile.type
+          }
+        }
+      ])
+
+      const response = await result.response
+      const text = response.text()
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+
+      if (jsonMatch) {
+        const analysis = JSON.parse(jsonMatch[0])
+        console.log('✅ Fallback model succeeded:', analysis)
+
+        return {
+          fillPercentage: Math.min(Math.max(analysis.fillPercentage || 0, 0), 100),
+          severity: normalizeSeverity(analysis.severity),
+          wasteType: analysis.wasteType || 'Unknown',
+          confidence: Math.min(Math.max(analysis.confidence || 80, 0), 100),
+          observations: analysis.observations || 'Analysis completed',
+          rawResponse: analysis
+        }
+      }
+    } catch (fallbackError) {
+      console.error('❌ Fallback model also failed:', fallbackError.message)
+    }
+
+    // FINAL FALLBACK: Return mock data for demo
+    console.warn('⚠️ All AI models unavailable - Using simulated analysis for demo')
+    console.warn('💡 This is expected if API key is invalid or quota exceeded')
+
+    // Generate more realistic mock data with varied fill levels
+    const mockFill = Math.floor(Math.random() * 100) // 0-100% for variety
+    const mockSeverity = mockFill > 70 ? 'high' : mockFill > 40 ? 'medium' : 'low'
+    const wasteTypes = ['Mixed Waste', 'Plastic Bottles', 'Paper & Cardboard', 'General Waste', 'Recyclables', 'Food Waste']
     const mockType = wasteTypes[Math.floor(Math.random() * wasteTypes.length)]
 
     return {
       fillPercentage: mockFill,
       severity: mockSeverity,
       wasteType: mockType,
-      confidence: 85,
-      observations: `Automated analysis: Bin appears ${mockSeverity === 'high' ? 'nearly full' : 'partially filled'} with ${mockType.toLowerCase()}. Cleaning ${mockSeverity === 'high' ? 'recommended soon' : 'can be scheduled'}.`,
-      rawResponse: { mock: true, reason: 'API unavailable' }
+      confidence: 75,
+      observations: `Simulated analysis: Bin appears ${mockSeverity === 'high' ? 'nearly full' : mockSeverity === 'medium' ? 'partially filled' : 'mostly empty'} with ${mockType.toLowerCase()}. ${mockSeverity === 'high' ? 'Urgent cleaning needed' : mockSeverity === 'medium' ? 'Schedule cleaning soon' : 'Low priority'}.`,
+      rawResponse: {
+        mock: true,
+        reason: 'AI API unavailable',
+        originalError: error.message
+      }
     }
   }
 }
@@ -122,8 +190,10 @@ function normalizeSeverity(severity) {
  */
 export async function verifyCleaningImage(imageFile) {
   try {
+    console.log('🧹 Verifying bin cleanliness with AI...')
+
     const model = genAI.getGenerativeModel({
-      model: 'gemini-pro-vision'
+      model: 'gemini-1.5-flash-latest'
     })
 
     const base64Image = await fileToBase64(imageFile)
@@ -165,6 +235,8 @@ Be STRICT: If you see ANY significant waste or the bin is not empty, set isClean
 
     const verification = JSON.parse(jsonMatch[0])
 
+    console.log('✅ Verification result:', verification)
+
     // Additional validation: reject if fill > 15%
     if (verification.fillPercentage > 15) {
       verification.isCleaned = false
@@ -173,7 +245,7 @@ Be STRICT: If you see ANY significant waste or the bin is not empty, set isClean
 
     return verification
   } catch (error) {
-    console.error('Error verifying cleaning:', error)
+    console.error('❌ Error verifying cleaning:', error.message)
 
     // FALLBACK: For demo, randomly accept/reject to simulate real behavior
     console.warn('⚠️ AI verification unavailable - Using simulated verification for demo')
@@ -197,8 +269,10 @@ Be STRICT: If you see ANY significant waste or the bin is not empty, set isClean
  */
 export async function compareImages(originalImageUrl, completionImageFile) {
   try {
+    console.log('🔄 Comparing images with AI...')
+
     const model = genAI.getGenerativeModel({
-      model: 'gemini-pro-vision'
+      model: 'gemini-1.5-flash-latest'
     })
 
     // Fetch the original image
@@ -256,6 +330,8 @@ Be STRICT: They must clearly be the same bin. If you're unsure, set isSameBin to
 
     const comparison = JSON.parse(jsonMatch[0])
 
+    console.log('✅ Comparison result:', comparison)
+
     // Require high confidence for same bin
     if (comparison.confidence < 70) {
       comparison.isSameBin = false
@@ -264,7 +340,7 @@ Be STRICT: They must clearly be the same bin. If you're unsure, set isSameBin to
 
     return comparison
   } catch (error) {
-    console.error('Error comparing images:', error)
+    console.error('❌ Error comparing images:', error.message)
 
     // FALLBACK: For demo, accept with warning
     console.warn('⚠️ Image comparison unavailable - Auto-accepting for demo (should verify manually)')

@@ -565,8 +565,8 @@ export default function WorkerDashboard() {
                             {priorityInfo.text}
                           </span>
                           {task.is_predicted && (
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
-                              PREDICTED
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                              SCHEDULED
                             </span>
                           )}
                         </div>
@@ -584,9 +584,21 @@ export default function WorkerDashboard() {
                           )}
                         </div>
 
-                        {task.notes && (
+                        {task.notes && task.notes.startsWith('[SCHEDULED]') ? (
+                          <div className="mt-2 bg-purple-50 border border-purple-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Clock className="w-4 h-4 text-purple-600" />
+                              <span className="text-sm font-medium text-purple-800">
+                                {task.notes.split('|')[0].replace('[SCHEDULED]', '').trim()}
+                              </span>
+                            </div>
+                            <p className="text-xs text-purple-600">
+                              {task.notes.split('|').slice(1).join(' | ').trim()}
+                            </p>
+                          </div>
+                        ) : task.notes ? (
                           <p className="mt-2 text-sm text-gray-600 italic">{task.notes}</p>
-                        )}
+                        ) : null}
                       </div>
                     </div>
 
