@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { optimizeRoute, formatDistance, formatTime, getTotalEstimatedTime } from '../lib/routeOptimizer'
-import { verifyCleaningImage, compareImages } from '../lib/aiService'
 import { Camera, MapPin, CheckCircle, Clock, Navigation, Loader, Upload, Leaf, LogOut } from 'lucide-react'
 
 export default function WorkerDashboard() {
@@ -206,55 +205,7 @@ export default function WorkerDashboard() {
     try {
       setUploadingImage(true)
 
-      console.log('Fetching original waste report...')
-      const { data: wasteReports, error: reportError } = await supabase
-        .from('waste_reports')
-        .select('image_url')
-        .eq('bin_id', selectedTask.bin_id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      if (reportError) {
-        console.error('Error fetching original report:', reportError)
-        throw new Error('Could not fetch original report')
-      }
-
-      const originalImageUrl = wasteReports?.[0]?.image_url
-
-      if (!originalImageUrl) {
-        console.warn('No original image found - skipping image comparison')
-      }
-
-      if (originalImageUrl) {
-        console.log('Comparing original and completion images...')
-        const comparison = await compareImages(originalImageUrl, capturedImage.file)
-
-        console.log('Comparison result:', comparison)
-
-        if (!comparison.isSameBin) {
-          setError(`Image Verification Failed: The images don't appear to be the same bin.\n\nReason: ${comparison.reasoning}\n\nPlease take a photo of the correct bin that was reported.`)
-          setCompletingTask(false)
-          setUploadingImage(false)
-          return
-        }
-
-        console.log('Image comparison passed - same bin confirmed')
-      }
-
-      console.log('Verifying bin is clean...')
-      const verification = await verifyCleaningImage(capturedImage.file)
-
-      console.log('Cleaning verification result:', verification)
-
-      if (!verification.isCleaned) {
-        setError(`Cleaning Verification Failed: ${verification.notes}\n\nThe bin must be properly cleaned (less than 15% full) before marking as complete.\n\nCurrent fill: ${verification.fillPercentage}%`)
-        setCompletingTask(false)
-        setUploadingImage(false)
-        return
-      }
-
-      console.log('Cleaning verification passed')
-
+      // Upload completion image
       console.log('Uploading completion image...')
       const fileName = `completed-${Date.now()}.jpg`
       const { error: uploadError } = await supabase.storage
@@ -290,14 +241,14 @@ export default function WorkerDashboard() {
       await supabase
         .from('bins')
         .update({
-          current_fill_percentage: verification.fillPercentage || 0,
+          current_fill_percentage: 0,
           current_severity: 'low',
           last_cleaned_at: endTime.toISOString()
         })
         .eq('id', selectedTask.bin_id)
 
       console.log('Task completed successfully!')
-      setSuccess('Task completed successfully! Bin verified as clean.')
+      setSuccess('Task completed successfully!')
       setSelectedTask(null)
       setCapturedImage(null)
       fetchTasks()
@@ -529,7 +480,7 @@ export default function WorkerDashboard() {
             </div>
           ) : (
             optimizedRoute?.sequence.map((bin, index) => {
-              const task = tasks.find((t) => t.bin_id === bin.id)
+              const task = tasks.find((t) => t.id === bin.taskId)
               if (!task) return null
 
               const priorityInfo = getPriorityInfo(task.priority)
