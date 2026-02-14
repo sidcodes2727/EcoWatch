@@ -14,13 +14,13 @@ export async function generateDailySchedule() {
   try {
     console.log('📊 Generating daily cleaning schedule from historical data...')
 
-    // Fetch all reports from the last 5 days
-    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    // Fetch all reports from the last 14 days
+    const lookbackDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
 
     const { data: reports, error: reportsError } = await supabase
       .from('waste_reports')
       .select('bin_id, fill_percentage, severity, waste_type, created_at, bins(id, bin_code, location_name, department, latitude, longitude)')
-      .gte('created_at', fiveDaysAgo)
+      .gte('created_at', lookbackDate)
       .order('created_at', { ascending: true })
 
     if (reportsError) throw reportsError
@@ -30,16 +30,27 @@ export async function generateDailySchedule() {
       return { schedule: [], stats: { totalBins: 0, totalSlots: 0 } }
     }
 
-    console.log(`📋 Analyzing ${reports.length} reports from last 5 days...`)
+    console.log(`📋 Analyzing ${reports.length} reports from last 14 days...`)
 
     // Fetch completed cleaning tasks to understand cleaning patterns
     const { data: completedTasks, error: tasksError } = await supabase
       .from('cleaning_tasks')
       .select('bin_id, completed_at, actual_duration_minutes, priority')
       .eq('status', 'completed')
-      .gte('completed_at', fiveDaysAgo)
+      .gte('completed_at', lookbackDate)
 
     if (tasksError) throw tasksError
+
+    // Fetch current bin states (fill level, last cleaned time)
+    const { data: activeBins, error: binsError } = await supabase
+      .from('bins')
+      .select('id, current_fill_percentage, last_cleaned_at')
+      .eq('is_active', true)
+
+    if (binsError) throw binsError
+
+    const binsMap = {}
+    ;(activeBins || []).forEach((b) => { binsMap[b.id] = b })
 
     // Step 1: Analyze time-of-day patterns for each bin
     const binPatterns = analyzeBinPatterns(reports)
@@ -47,8 +58,8 @@ export async function generateDailySchedule() {
     // Step 2: Analyze cleaning frequency needed
     const cleaningFrequency = analyzeCleaningFrequency(reports, completedTasks || [])
 
-    // Step 3: Generate time slots based on patterns
-    const schedule = generateTimeSlots(binPatterns, cleaningFrequency)
+    // Step 3: Generate time slots based on patterns + current bin state
+    const schedule = generateTimeSlots(binPatterns, cleaningFrequency, binsMap)
 
     // Step 4: Calculate schedule confidence
     const stats = calculateScheduleStats(schedule, reports)
@@ -67,11 +78,16 @@ export async function generateDailySchedule() {
  */
 function analyzeBinPatterns(reports) {
   const patterns = {}
+  const now = Date.now()
 
   reports.forEach((report) => {
     const binId = report.bin_id
     const hour = new Date(report.created_at).getHours()
     const bin = report.bins
+
+    // Recency weighting: recent reports count more
+    const daysSinceReport = (now - new Date(report.created_at).getTime()) / (24 * 60 * 60 * 1000)
+    const weight = 1 / (1 + daysSinceReport * 0.15) // Gradual decay
 
     if (!patterns[binId]) {
       patterns[binId] = {
@@ -83,7 +99,8 @@ function analyzeBinPatterns(reports) {
         longitude: bin?.longitude,
         hourlyData: {},
         totalReports: 0,
-        avgFill: 0,
+        weightedFillSum: 0,
+        totalWeight: 0,
         maxFill: 0,
         highSeverityCount: 0,
         dominantWasteType: {}
@@ -92,7 +109,8 @@ function analyzeBinPatterns(reports) {
 
     const p = patterns[binId]
     p.totalReports++
-    p.avgFill += report.fill_percentage
+    p.weightedFillSum += report.fill_percentage * weight
+    p.totalWeight += weight
     p.maxFill = Math.max(p.maxFill, report.fill_percentage)
 
     if (report.severity === 'high') p.highSeverityCount++
@@ -104,16 +122,17 @@ function analyzeBinPatterns(reports) {
     // Track hourly patterns - group into time slots
     const slot = getTimeSlot(hour)
     if (!p.hourlyData[slot]) {
-      p.hourlyData[slot] = { count: 0, avgFill: 0, maxFill: 0, totalFill: 0 }
+      p.hourlyData[slot] = { count: 0, weightedFillSum: 0, totalWeight: 0, maxFill: 0 }
     }
     p.hourlyData[slot].count++
-    p.hourlyData[slot].totalFill += report.fill_percentage
+    p.hourlyData[slot].weightedFillSum += report.fill_percentage * weight
+    p.hourlyData[slot].totalWeight += weight
     p.hourlyData[slot].maxFill = Math.max(p.hourlyData[slot].maxFill, report.fill_percentage)
   })
 
-  // Calculate averages
+  // Calculate weighted averages
   Object.values(patterns).forEach((p) => {
-    p.avgFill = p.avgFill / p.totalReports
+    p.avgFill = p.totalWeight > 0 ? p.weightedFillSum / p.totalWeight : 0
 
     // Get dominant waste type
     let maxCount = 0
@@ -126,9 +145,9 @@ function analyzeBinPatterns(reports) {
     })
     p.wasteType = dominant
 
-    // Calculate hourly averages
+    // Calculate hourly weighted averages
     Object.values(p.hourlyData).forEach((slotData) => {
-      slotData.avgFill = slotData.totalFill / slotData.count
+      slotData.avgFill = slotData.totalWeight > 0 ? slotData.weightedFillSum / slotData.totalWeight : 0
     })
   })
 
@@ -191,15 +210,40 @@ function analyzeCleaningFrequency(reports, completedTasks) {
 
 /**
  * Generate specific time slots for today's cleaning schedule
+ * @param {Object} binPatterns - Analyzed bin patterns
+ * @param {Object} cleaningFrequency - Cleaning frequency data
+ * @param {Object} binsMap - Current bin states keyed by bin ID
  */
-function generateTimeSlots(binPatterns, cleaningFrequency) {
+function generateTimeSlots(binPatterns, cleaningFrequency, binsMap) {
   const schedule = []
-  const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  const now = new Date()
+  const currentHour = now.getHours()
+
+  // Map time slots to their midpoint hour for time-until calculation
+  const slotMidHours = {
+    morning: 8.5,
+    midday: 12,
+    afternoon: 15.5,
+    evening: 18.5,
+    night: 23
+  }
 
   Object.values(binPatterns).forEach((pattern) => {
     const freq = cleaningFrequency[pattern.binId]
     if (!freq) return
+
+    const binState = binsMap[pattern.binId]
+    const currentFill = binState?.current_fill_percentage ?? pattern.avgFill
+    const lastCleaned = binState?.last_cleaned_at ? new Date(binState.last_cleaned_at) : null
+
+    // Calculate hours since last cleaning
+    const hoursSinceCleaning = lastCleaned
+      ? (now - lastCleaned) / (60 * 60 * 1000)
+      : 48 // Assume long time if unknown
+
+    // Calculate historical fill rate (% per hour) from pattern data
+    // Use weighted average fill divided by typical active hours (12h)
+    const historicalFillRate = pattern.avgFill / 12
 
     // Find peak slots
     const slots = Object.entries(pattern.hourlyData)
@@ -220,14 +264,41 @@ function generateTimeSlots(binPatterns, cleaningFrequency) {
       if (data.avgFill < 40) return // Skip low-fill slots
 
       const timeRange = getSlotTimeRange(slot)
+      const slotMidHour = slotMidHours[slot] || 12
 
-      // Calculate predicted fill for today at this time
-      const predictedFill = Math.min(Math.round(data.avgFill * 1.1), 100) // 10% buffer
+      // Calculate hours until this time slot
+      let hoursUntilSlot = slotMidHour - currentHour
+      if (hoursUntilSlot < 0) hoursUntilSlot += 24
 
-      // Calculate confidence based on data consistency
+      // Predict fill: project from current bin fill using historical rate
+      let predictedFill
+      if (hoursSinceCleaning < 2) {
+        // Recently cleaned - project from current low fill
+        predictedFill = Math.min(
+          Math.round(currentFill + historicalFillRate * hoursUntilSlot),
+          100
+        )
+      } else if (hoursSinceCleaning < 8) {
+        // Cleaned somewhat recently - blend current state with historical pattern
+        const blendFactor = hoursSinceCleaning / 8 // 0 to 1
+        const projectedFill = currentFill + historicalFillRate * hoursUntilSlot
+        predictedFill = Math.min(
+          Math.round(projectedFill * (1 - blendFactor * 0.3) + data.avgFill * (blendFactor * 0.3)),
+          100
+        )
+      } else {
+        // Not recently cleaned - use historical pattern but anchor to current fill
+        const projectedFill = currentFill + historicalFillRate * hoursUntilSlot
+        predictedFill = Math.min(
+          Math.round((projectedFill + data.avgFill) / 2),
+          100
+        )
+      }
+
+      // Conservative confidence: starts lower, grows slower, caps at 90
       const confidence = Math.min(
-        50 + (data.count * 10) + (pattern.totalReports * 2),
-        95
+        30 + (data.count * 5) + Math.min(pattern.totalReports, 20),
+        90
       )
 
       schedule.push({
@@ -243,11 +314,12 @@ function generateTimeSlots(binPatterns, cleaningFrequency) {
         predictedFill: predictedFill,
         historicalAvgFill: Math.round(data.avgFill),
         historicalMaxFill: Math.round(data.maxFill),
+        currentFill: Math.round(currentFill),
         wasteType: pattern.wasteType,
         priority: priority,
         confidence: confidence,
         dataPoints: data.count,
-        reason: `Bin historically reaches ${Math.round(data.avgFill)}% fill during ${timeRange.label.split('(')[0].trim()} (max: ${Math.round(data.maxFill)}%). Schedule cleaning before this time.`
+        reason: `Bin currently at ${Math.round(currentFill)}%, historically reaches ${Math.round(data.avgFill)}% during ${timeRange.label.split('(')[0].trim()} (max: ${Math.round(data.maxFill)}%). Predicted: ${predictedFill}%.`
       })
     })
   })
@@ -286,7 +358,7 @@ function calculateScheduleStats(schedule, reports) {
     slotBreakdown: slotCounts,
     avgConfidence,
     dataPointsAnalyzed: reports.length,
-    daysAnalyzed: 5
+    daysAnalyzed: 14
   }
 }
 

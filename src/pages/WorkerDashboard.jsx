@@ -342,7 +342,7 @@ export default function WorkerDashboard() {
   return (
     <div className="min-h-screen bg-surface">
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary-800 via-primary-700 to-secondary-700 shadow-lg">
+      <div className="bg-primary-900/70 backdrop-blur-xl shadow-lg sticky top-0 z-[1000] border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center">

@@ -16,13 +16,13 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 })
 
-// Custom marker icons
+// Custom dustbin marker icons
 const createIcon = (color) =>
   L.divIcon({
     className: 'custom-marker',
-    html: `<div style="background-color: ${color}; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15]
+    html: `<div style="filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 20]
   })
 
 const severityIcons = {
@@ -351,7 +351,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-surface">
       {/* Header */}
-      <div className="bg-gradient-to-r from-dark via-dark-50 to-primary-900 shadow-lg sticky top-0 z-10">
+      <div className="bg-dark/70 backdrop-blur-xl shadow-lg sticky top-0 z-[1000] border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 bg-gradient-to-br from-primary-400 to-secondary-400 rounded-xl flex items-center justify-center shadow-glow-primary">
@@ -418,7 +418,7 @@ export default function AdminDashboard() {
         )}
 
         {/* Map */}
-        <div className="dash-card p-6 mb-8 animate-fade-in">
+        <div className="dash-card p-6 mb-8 animate-fade-in relative z-0">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center">
