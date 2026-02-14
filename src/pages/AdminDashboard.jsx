@@ -99,7 +99,7 @@ export default function AdminDashboard() {
   const fetchReports = async () => {
     const { data, error } = await supabase
       .from('waste_reports')
-      .select('*, bins(bin_code, location_name), reporter:profiles!reporter_id(full_name)')
+      .select('*, bins(bin_code, location_name, department), reporter:profiles!reporter_id(full_name)')
       .order('created_at', { ascending: false })
       .limit(50)
 
@@ -521,26 +521,34 @@ export default function AdminDashboard() {
             )}
           </div>
 
-          {/* Department Distribution */}
+          {/* Department Waste Generation */}
           <div className="dash-card p-6 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
             <div className="flex items-center gap-3 mb-5">
               <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl flex items-center justify-center">
                 <Activity className="w-4 h-4 text-white" />
               </div>
-              <h3 className="text-base font-bold text-gray-900">Bins by Department</h3>
+              <h3 className="text-base font-bold text-gray-900">Waste Generation by Department</h3>
             </div>
-            {bins.length > 0 ? (
+            {reports.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart
-                  data={Object.entries(
-                    bins.reduce((acc, bin) => {
-                      acc[bin.department] = (acc[bin.department] || 0) + 1
-                      return acc
-                    }, {})
-                  ).map(([name, count]) => ({ name, count }))}
+                  data={(() => {
+                    const deptMap = {}
+                    reports.forEach((r) => {
+                      const dept = r.bins?.department || 'Unknown'
+                      if (!deptMap[dept]) deptMap[dept] = { name: dept, reports: 0, totalFill: 0, highSeverity: 0 }
+                      deptMap[dept].reports++
+                      deptMap[dept].totalFill += r.fill_percentage
+                      if (r.severity === 'high') deptMap[dept].highSeverity++
+                    })
+                    return Object.values(deptMap).map((d) => ({
+                      ...d,
+                      avgFill: Math.round(d.totalFill / d.reports)
+                    })).sort((a, b) => b.reports - a.reports)
+                  })()}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#94a3b8" />
                   <YAxis stroke="#94a3b8" />
                   <Tooltip
                     contentStyle={{
@@ -550,12 +558,15 @@ export default function AdminDashboard() {
                       fontSize: '13px'
                     }}
                   />
-                  <Bar dataKey="count" fill="#059669" radius={[6, 6, 0, 0]} />
+                  <Legend />
+                  <Bar dataKey="reports" fill="#0891b2" radius={[4, 4, 0, 0]} name="Reports" />
+                  <Bar dataKey="avgFill" fill="#059669" radius={[4, 4, 0, 0]} name="Avg Fill %" />
+                  <Bar dataKey="highSeverity" fill="#ef4444" radius={[4, 4, 0, 0]} name="High Severity" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-400 text-sm">No bin data available</p>
+                <p className="text-gray-400 text-sm">No report data available</p>
               </div>
             )}
           </div>
