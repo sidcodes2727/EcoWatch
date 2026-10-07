@@ -74,7 +74,7 @@ export default function Register() {
                     key={role.value}
                     type="button"
                     onClick={() => setFormData({ ...formData, role: role.value })}
-                    className={`py-3 text-xs font-bold tracking-widest uppercase transition-all duration-300 \${
+                    className={`py-3 text-xs font-bold tracking-widest uppercase transition-all duration-300 ${
                       formData.role === role.value 
                         ? 'bg-eco-900 text-white' 
                         : 'bg-transparent text-eco-600 hover:bg-eco-50'
