@@ -1,31 +1,34 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Leaf, Mail, Lock, User, Phone, Building, ArrowRight, ShieldCheck, Eye, EyeOff } from 'lucide-react'
+import { Leaf, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 export default function Register() {
   const [formData, setFormData] = useState({
     email: '', password: '', confirmPassword: '',
     fullName: '', role: 'user', department: '', phone: ''
   })
-  const [showPwd, setShowPwd]   = useState(false)
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
-  const { signUp }              = useAuth()
-  const navigate                = useNavigate()
+  const [showPwd, setShowPwd] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const { signUp } = useAuth()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     if (formData.password !== formData.confirmPassword) return setError('Passwords do not match')
     if (formData.password.length < 6) return setError('Password must be at least 6 characters')
+    
     setLoading(true)
     try {
       await signUp(formData.email, formData.password, {
-        fullName: formData.fullName, role: formData.role,
-        department: formData.department, phone: formData.phone
+        fullName: formData.fullName, 
+        role: formData.role,
+        department: formData.department, 
+        phone: formData.phone
       })
-      navigate('/')
+      navigate('/dashboard')
     } catch (err) {
       setError(err.message || 'Failed to create account')
     } finally {
@@ -35,143 +38,103 @@ export default function Register() {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value })
 
-  const roles = [
-    { value: 'user',   label: 'Reporter', desc: 'Report waste bins', emoji: '📸' },
-    { value: 'worker', label: 'Worker',   desc: 'Clean assigned bins', emoji: '🧹' },
-    { value: 'admin',  label: 'Admin',    desc: 'Manage & monitor', emoji: '⚡' },
-  ]
-
   return (
-    <div className="min-h-screen auth-bg relative overflow-hidden flex items-center justify-center py-10">
-      {/* Orbs */}
-      <div className="orb w-96 h-96 bg-primary-400 -top-20 -right-16 animate-float-slow" />
-      <div className="orb w-72 h-72 bg-secondary-400 bottom-[-12%] -left-16 animate-float" />
-      <div className="orb w-48 h-48 bg-accent-500 top-[45%] right-[30%]" />
+    <div className="min-h-screen flex items-center justify-center p-6 bg-grid-pattern bg-grid-size relative py-16">
+      <Link to="/" className="absolute top-8 left-8 flex items-center gap-2">
+        <Leaf className="w-5 h-5 text-eco-900" strokeWidth={1.5} />
+        <span className="font-serif text-lg tracking-[0.2em] text-eco-900 uppercase">EcoWatch</span>
+      </Link>
 
-      <div className="w-full max-w-lg mx-4 relative z-10 animate-fade-in">
-        {/* Brand */}
-        <div className="text-center mb-7">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-glow-primary"
-            style={{ background: 'linear-gradient(135deg,#10b981,#0891b2)' }}
-          >
-            <Leaf className="w-9 h-9 text-white" />
-          </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Join EcoWatch</h1>
-          <p className="text-primary-300 text-sm mt-1">Create your account in seconds</p>
+      <div className="w-full max-w-2xl z-10">
+        
+        <div className="text-center mb-12">
+          <h1 className="font-serif text-5xl text-eco-900 tracking-tight mb-4">Join EcoWatch</h1>
+          <p className="text-eco-600 font-light text-sm tracking-wide">Register to participate in campus environmental stewardship</p>
         </div>
 
-        {/* Card */}
-        <div className="glass rounded-3xl p-8 shadow-glass-dark">
+        <div className="card-editorial card-body-editorial bg-white/90 backdrop-blur-xl">
           {error && (
-            <div className="alert-error mb-5 text-sm">
-              <span className="text-red-500">⚠</span> {error}
+            <div className="alert-error mb-8">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Full Name */}
+          <form onSubmit={handleSubmit} className="space-y-8">
+            
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Full Name</label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                <input type="text" name="fullName" value={formData.fullName} onChange={handleChange}
-                  required className="input-field pl-10" placeholder="Your full name" />
-              </div>
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                <input type="email" name="email" value={formData.email} onChange={handleChange}
-                  required className="input-field pl-10" placeholder="you@campus.edu" />
-              </div>
-            </div>
-
-            {/* Role Selector */}
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Role</label>
-              <div className="grid grid-cols-3 gap-2.5">
-                {roles.map((role) => (
+              <label className="label-editorial mb-4">I am registering as a...</label>
+              <div className="grid grid-cols-3 gap-0 border border-eco-900/20 p-1 bg-white">
+                {[
+                  { value: 'user', label: 'Reporter' },
+                  { value: 'worker', label: 'Worker' },
+                  { value: 'admin', label: 'Admin' }
+                ].map((role) => (
                   <button
                     key={role.value}
                     type="button"
                     onClick={() => setFormData({ ...formData, role: role.value })}
-                    className={`p-3 rounded-xl border-2 text-center transition-all duration-200 ${
-                      formData.role === role.value
-                        ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm'
-                        : 'border-gray-200 bg-white/60 text-gray-600 hover:border-primary-300 hover:bg-primary-50/40'
+                    className={`py-3 text-xs font-bold tracking-widest uppercase transition-all duration-300 \${
+                      formData.role === role.value 
+                        ? 'bg-eco-900 text-white' 
+                        : 'bg-transparent text-eco-600 hover:bg-eco-50'
                     }`}
                   >
-                    <div className="text-xl mb-0.5">{role.emoji}</div>
-                    <p className="text-xs font-bold">{role.label}</p>
-                    <p className="text-[9px] mt-0.5 opacity-60 leading-tight">{role.desc}</p>
+                    {role.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Dept + Phone */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Department</label>
-                <div className="relative">
-                  <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input type="text" name="department" value={formData.department} onChange={handleChange}
-                    className="input-field pl-10" placeholder="e.g. CSE" />
-                </div>
+                <label className="label-editorial">Full Name</label>
+                <input type="text" name="fullName" value={formData.fullName} onChange={handleChange} required className="input-editorial" placeholder="Jane Doe" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Phone</label>
-                <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input type="tel" name="phone" value={formData.phone} onChange={handleChange}
-                    className="input-field pl-10" placeholder="Number" />
-                </div>
+                <label className="label-editorial">Email Address</label>
+                <input type="email" name="email" value={formData.email} onChange={handleChange} required className="input-editorial" placeholder="name@campus.edu" />
               </div>
             </div>
 
-            {/* Password + Confirm */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Password</label>
+                <label className="label-editorial">Department (Optional)</label>
+                <input type="text" name="department" value={formData.department} onChange={handleChange} className="input-editorial" placeholder="e.g. Science" />
+              </div>
+              <div>
+                <label className="label-editorial">Phone Number (Optional)</label>
+                <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className="input-editorial" placeholder="+1 (555) 000-0000" />
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              <div>
+                <label className="label-editorial">Password</label>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input type={showPwd ? 'text' : 'password'} name="password" value={formData.password}
-                    onChange={handleChange} required className="input-field pl-10 pr-9" placeholder="Min 6 chars" />
-                  <button type="button" onClick={() => setShowPwd(p => !p)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <input type={showPwd ? 'text' : 'password'} name="password" value={formData.password} onChange={handleChange} required className="input-editorial pr-10" placeholder="Min. 6 chars" />
+                  <button type="button" onClick={() => setShowPwd(p => !p)} className="absolute right-0 top-1/2 -translate-y-1/2 text-eco-400 hover:text-eco-900 p-2">
+                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Confirm</label>
-                <div className="relative">
-                  <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input type="password" name="confirmPassword" value={formData.confirmPassword}
-                    onChange={handleChange} required className="input-field pl-10" placeholder="Re-enter" />
-                </div>
+                <label className="label-editorial">Confirm Password</label>
+                <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required className="input-editorial" placeholder="Re-enter password" />
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3.5 text-base mt-1">
-              {loading ? (
-                <span className="flex items-center gap-2 justify-center">
-                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Creating account…
-                </span>
-              ) : (
-                <>Create Account <ArrowRight className="w-4 h-4" /></>
-              )}
-            </button>
+            <div className="pt-4">
+              <button type="submit" disabled={loading} className="btn-editorial btn-editorial-primary w-full">
+                {loading ? 'Processing...' : 'Create Account'}
+              </button>
+            </div>
           </form>
-
-          <div className="mt-5 text-center">
-            <Link to="/login" className="text-primary-600 hover:text-primary-700 text-sm font-semibold transition-colors hover:underline underline-offset-2">
-              Already have an account? <span className="text-primary-500">Sign in</span>
+          
+          <div className="mt-8 text-center text-xs tracking-wider border-t border-eco-900/10 pt-8">
+            <span className="text-eco-500">Already have an account? </span>
+            <Link to="/login" className="text-eco-900 font-bold hover:text-accent transition-colors">
+              SIGN IN
             </Link>
           </div>
         </div>

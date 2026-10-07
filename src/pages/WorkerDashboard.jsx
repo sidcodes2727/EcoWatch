@@ -4,25 +4,25 @@ import { supabase } from '../lib/supabase'
 import { verifyCleaningImage } from '../lib/aiService'
 import { optimizeRoute, formatDistance, formatTime, getTotalEstimatedTime } from '../lib/routeOptimizer'
 import {
-  Camera, MapPin, CheckCircle, Clock, Navigation,
-  Loader, Upload, Leaf, LogOut, AlertCircle, XCircle
+  Camera, MapPin, CheckCircle, Navigation,
+  Loader, Upload, Leaf, AlertCircle
 } from 'lucide-react'
 
 export default function WorkerDashboard() {
   const { profile, signOut } = useAuth()
-  const [tasks, setTasks]               = useState([])
+  const [tasks, setTasks] = useState([])
   const [optimizedRoute, setOptimizedRoute] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
   const [completingTask, setCompletingTask] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
-  const [capturedImage, setCapturedImage]   = useState(null)
-  const [capturing, setCapturing]           = useState(false)
+  const [capturedImage, setCapturedImage] = useState(null)
+  const [capturing, setCapturing] = useState(false)
   const [showCompletionOptions, setShowCompletionOptions] = useState(false)
-  const [error, setError]     = useState('')
+  const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  const videoRef    = useRef(null)
-  const streamRef   = useRef(null)
+  const videoRef = useRef(null)
+  const streamRef = useRef(null)
   const fileInputRef = useRef(null)
 
   useEffect(() => { fetchTasks(); subscribeToTasks() }, [profile?.id])
@@ -63,7 +63,7 @@ export default function WorkerDashboard() {
         .update({ assigned_worker_id: profile.id, status: 'assigned', assigned_at: new Date().toISOString() })
         .eq('id', taskId)
       if (error) throw error
-      fetchTasks(); setSuccess('Task accepted!'); setTimeout(() => setSuccess(''), 3000)
+      fetchTasks(); setSuccess('Task accepted'); setTimeout(() => setSuccess(''), 3000)
     } catch { setError('Failed to accept task') }
   }
 
@@ -72,7 +72,7 @@ export default function WorkerDashboard() {
       const { error } = await supabase.from('cleaning_tasks')
         .update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', taskId)
       if (error) throw error
-      fetchTasks(); setSuccess('Task started!'); setTimeout(() => setSuccess(''), 3000)
+      fetchTasks(); setSuccess('Task started'); setTimeout(() => setSuccess(''), 3000)
     } catch { setError('Failed to start task') }
   }
 
@@ -85,7 +85,7 @@ export default function WorkerDashboard() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       if (videoRef.current) { videoRef.current.srcObject = stream; streamRef.current = stream }
-    } catch (err) { setError('Failed to start camera: ' + err.message); setCapturing(false) }
+    } catch (err) { setError('Camera failed: ' + err.message); setCapturing(false) }
   }
 
   const handleFileUpload = () => { setShowCompletionOptions(false); fileInputRef.current?.click() }
@@ -93,8 +93,8 @@ export default function WorkerDashboard() {
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) return setError('Please select an image file')
-    if (file.size > 5 * 1024 * 1024) return setError('Image too large. Max 5 MB')
+    if (!file.type.startsWith('image/')) return setError('Select an image file')
+    if (file.size > 5 * 1024 * 1024) return setError('Image too large (max 5MB)')
     setCapturedImage({ url: URL.createObjectURL(file), file })
   }
 
@@ -123,7 +123,7 @@ export default function WorkerDashboard() {
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out')), 15000))
         ])
         if (!verification.isCleaned) {
-          setError(`Bin not cleaned properly.\n\n${verification.notes}\n\nFill: ${verification.fillPercentage}%\n\nPlease clean and try again.`)
+          setError(`Verification failed: ${verification.notes} (Fill: ${verification.fillPercentage}%). Please re-clean.`)
           setCompletingTask(false); setUploadingImage(false); return
         }
       } catch { verification = { isCleaned: true, fillPercentage: 0 } }
@@ -145,10 +145,11 @@ export default function WorkerDashboard() {
         .update({ current_fill_percentage: verification.fillPercentage || 0, current_severity: 'low', last_cleaned_at: endTime.toISOString() })
         .eq('id', selectedTask.bin_id)
 
-      setSuccess('Task completed! Bin verified as clean.')
+      setSuccess('Task marked as complete.')
       setSelectedTask(null); setCapturedImage(null); fetchTasks()
+      setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
-      setError('Failed to complete task: ' + err.message)
+      setError('Failed to complete: ' + err.message)
     } finally {
       setCompletingTask(false)
     }
@@ -160,113 +161,87 @@ export default function WorkerDashboard() {
   }
 
   const getStatusBadge = (s) => {
-    const map = { pending: 'badge badge-yellow', assigned: 'badge badge-blue', in_progress: 'badge badge-purple' }
-    return map[s] || 'badge bg-gray-100 text-gray-600'
+    const map = { pending: 'badge-yellow', assigned: 'badge-slate', in_progress: 'badge-eco' }
+    return `badge-editorial ${map[s] || 'badge-slate'}`
   }
 
-  const getPriorityInfo = (p) => {
-    if (p === 1) return { text: 'HIGH',   cls: 'badge badge-red' }
-    if (p === 2) return { text: 'MEDIUM', cls: 'badge badge-yellow' }
-    return { text: 'LOW', cls: 'badge badge-green' }
-  }
-
-  const getPriorityBorder = (p) => {
-    if (p === 1) return 'priority-high'
-    if (p === 2) return 'priority-medium'
-    return 'priority-low'
+  const getPriorityBadge = (p) => {
+    if (p === 1) return 'badge-editorial badge-red'
+    if (p === 2) return 'badge-editorial badge-yellow'
+    return 'badge-editorial badge-eco'
   }
 
   return (
-    <div className="min-h-screen bg-mesh">
-      {/* ── NAV ── */}
+    <div className="min-h-screen">
       <nav className="nav-header">
-        <div className="max-w-7xl mx-auto px-5 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                 style={{ background: 'linear-gradient(135deg,#10b981,#0891b2)' }}>
-              <Leaf className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-base font-extrabold text-white tracking-tight leading-none">Worker Dashboard</h1>
-              <p className="text-primary-300 text-xs mt-0.5">{profile?.full_name}</p>
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Leaf className="w-5 h-5 text-eco-900" strokeWidth={1.5} />
+            <div className="flex items-center gap-4">
+              <h1 className="font-serif text-lg tracking-[0.2em] text-eco-900 uppercase">Field Operations</h1>
+              <span className="text-eco-300">|</span>
+              <p className="text-[10px] font-bold tracking-[0.2em] text-eco-600 uppercase">{profile?.full_name}</p>
             </div>
           </div>
-          <button onClick={signOut}
-            className="flex items-center gap-2 text-white/70 hover:text-white hover:bg-white/10 px-4 py-2 rounded-xl transition-all duration-200 text-sm font-medium">
-            <LogOut className="w-4 h-4" /> Sign Out
+          <button onClick={signOut} className="btn-editorial-ghost">
+            Sign out
           </button>
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-5 py-8">
+      <div className="dashboard-container max-w-4xl">
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
 
-        {/* ── Status Messages ── */}
         {error && (
-          <div className="alert-error mb-5 whitespace-pre-line">
-            <XCircle className="w-5 h-5 flex-shrink-0 text-red-500 mt-0.5" />
-            <span className="text-sm">{error}</span>
+          <div className="alert-error mb-10">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
         {success && (
-          <div className="alert-success mb-5">
-            <CheckCircle className="w-5 h-5 flex-shrink-0 text-emerald-500" />
-            <span className="text-sm font-medium">{success}</span>
+          <div className="alert-success mb-10">
+            <CheckCircle className="w-5 h-5 flex-shrink-0" />
+            <span>{success}</span>
           </div>
         )}
 
-        {/* ── Route Overview ── */}
         {optimizedRoute && optimizedRoute.sequence.length > 0 && (
-          <div className="rounded-2xl p-6 mb-8 text-white animate-fade-in-up"
-               style={{ background: 'linear-gradient(135deg,#065f46,#0e7490)', boxShadow: '0 12px 40px -6px rgba(6,78,59,0.4)' }}>
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center"
-                   style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <Navigation className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-extrabold">Optimized Route</h2>
-                <p className="text-primary-200 text-xs">AI-calculated shortest path for today</p>
-              </div>
+          <div className="card-editorial mb-12 bg-eco-900 text-eco-50 border-none">
+            <div className="card-header-editorial border-eco-50/10">
+              <h2 className="font-serif text-2xl flex items-center gap-4 tracking-tight">
+                <Navigation className="w-5 h-5 text-eco-300" />
+                Optimized Itinerary
+              </h2>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 divide-x divide-eco-50/10">
               {[
-                { label: 'Bins to Clean', value: optimizedRoute.sequence.length },
-                { label: 'Total Distance', value: formatDistance(optimizedRoute.totalDistance) },
-                { label: 'Est. Time',
-                  value: formatTime(getTotalEstimatedTime(optimizedRoute.totalDistance, optimizedRoute.sequence.length)) },
+                { label: 'Targets', value: optimizedRoute.sequence.length },
+                { label: 'Distance', value: formatDistance(optimizedRoute.totalDistance) },
+                { label: 'Est. Duration', value: formatTime(getTotalEstimatedTime(optimizedRoute.totalDistance, optimizedRoute.sequence.length)) },
               ].map(({ label, value }) => (
-                <div key={label} className="rounded-xl p-4"
-                     style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-white/60 mb-1">{label}</p>
-                  <p className="text-3xl font-extrabold">{value}</p>
+                <div key={label} className="p-8 text-center">
+                  <p className="text-[10px] font-bold text-eco-400 uppercase tracking-widest mb-3">{label}</p>
+                  <p className="font-serif text-4xl">{value}</p>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* ── Completion Options Modal ── */}
         {showCompletionOptions && (
-          <div className="modal-overlay">
-            <div className="glass rounded-3xl p-7 max-w-sm w-full shadow-card-lg animate-scale-in">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                     style={{ background: 'linear-gradient(135deg,#059669,#0891b2)' }}>
-                  <Camera className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-extrabold text-gray-900">Completion Proof</h3>
-                <p className="text-gray-500 text-sm mt-1">Submit a photo of the cleaned bin</p>
+          <div className="modal-overlay-editorial">
+            <div className="card-editorial w-full max-w-md bg-white">
+              <div className="card-header-editorial">
+                <h3 className="font-serif text-2xl text-eco-900">Verification Source</h3>
               </div>
-              <div className="space-y-3">
-                <button onClick={handleCameraCapture} className="btn-primary w-full py-3.5">
-                  <Camera className="w-5 h-5" /> Capture with Camera
+              <div className="card-body-editorial space-y-4">
+                <button onClick={handleCameraCapture} className="btn-editorial btn-editorial-primary w-full">
+                  <Camera className="w-4 h-4 mr-3" /> Camera
                 </button>
-                <button onClick={handleFileUpload} className="btn-secondary w-full py-3.5">
-                  <Upload className="w-5 h-5" /> Upload from Gallery
+                <button onClick={handleFileUpload} className="btn-editorial btn-editorial-secondary w-full">
+                  <Upload className="w-4 h-4 mr-3" /> Upload File
                 </button>
-                <button onClick={() => setShowCompletionOptions(false)}
-                  className="w-full py-3 text-gray-500 hover:text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium text-sm">
+                <button onClick={() => setShowCompletionOptions(false)} className="btn-editorial btn-editorial-ghost w-full mt-4">
                   Cancel
                 </button>
               </div>
@@ -274,165 +249,140 @@ export default function WorkerDashboard() {
           </div>
         )}
 
-        {/* ── Camera Capture Modal ── */}
         {capturing && (
-          <div className="modal-overlay">
-            <div className="glass rounded-3xl p-6 max-w-2xl w-full shadow-card-lg animate-scale-in">
-              <h3 className="text-lg font-extrabold text-gray-900 mb-4">Capture Completion Proof</h3>
-              <div className="relative bg-dark rounded-2xl overflow-hidden mb-4 ring-1 ring-white/5">
-                <video ref={videoRef} autoPlay playsInline className="w-full" />
-                <div className="absolute inset-0 pointer-events-none"
-                     style={{ boxShadow: 'inset 0 0 40px rgba(0,0,0,0.4)' }} />
+          <div className="modal-overlay-editorial">
+            <div className="card-editorial w-full max-w-2xl max-h-[90vh] flex flex-col bg-white">
+              <div className="card-header-editorial shrink-0">
+                <h3 className="font-serif text-2xl text-eco-900">Capture Image</h3>
               </div>
-              <div className="flex gap-3">
-                <button onClick={handleCapture} className="btn-primary flex-1 py-3">
-                  <Camera className="w-5 h-5" /> Capture
-                </button>
-                <button onClick={handleCancelCapture} className="btn-ghost border border-gray-200 px-6">Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Image Review Modal ── */}
-        {capturedImage && !capturing && (
-          <div className="modal-overlay">
-            <div className="glass rounded-3xl p-6 max-w-2xl w-full shadow-card-lg animate-scale-in">
-              <h3 className="text-lg font-extrabold text-gray-900 mb-4">Review & Submit</h3>
-              <img src={capturedImage.url} alt="Completion proof"
-                className="w-full rounded-2xl mb-4 border border-gray-100 shadow-sm object-cover" />
-              {completingTask && (
-                <div className="flex items-center gap-3 mb-4 p-3 bg-primary-50 rounded-xl border border-primary-100">
-                  <Loader className="w-5 h-5 animate-spin text-primary-600 flex-shrink-0" />
-                  <p className="text-sm text-primary-700 font-medium">
-                    {uploadingImage ? 'Verifying bin is clean with AI…' : 'Completing task…'}
-                  </p>
+              <div className="card-body-editorial p-6 sm:p-8 overflow-y-auto">
+                <div className="relative border border-eco-900/10 bg-eco-50 mb-8 aspect-[4/3] sm:aspect-video flex items-center justify-center max-h-[50vh]">
+                  <video ref={videoRef} autoPlay playsInline className="w-full h-full object-contain grayscale-[20%]" />
                 </div>
-              )}
-              <div className="flex gap-3">
-                <button onClick={handleCompleteTask} disabled={completingTask}
-                  className="btn-primary flex-1 py-3">
-                  {completingTask ? (
-                    <><Loader className="w-5 h-5 animate-spin" /> Processing…</>
-                  ) : (
-                    <><CheckCircle className="w-5 h-5" /> Complete Task</>
-                  )}
-                </button>
-                <button onClick={() => setCapturedImage(null)} disabled={completingTask}
-                  className="btn-ghost border border-gray-200 px-6">Retake</button>
+                <div className="flex gap-4">
+                  <button onClick={handleCapture} className="btn-editorial btn-editorial-primary flex-1">
+                    Capture
+                  </button>
+                  <button onClick={handleCancelCapture} className="btn-editorial btn-editorial-secondary flex-1">
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── Task List ── */}
+        {capturedImage && !capturing && (
+          <div className="modal-overlay-editorial">
+            <div className="card-editorial w-full max-w-2xl max-h-[90vh] flex flex-col bg-white">
+              <div className="card-header-editorial shrink-0">
+                <h3 className="font-serif text-2xl text-eco-900">Review Documentation</h3>
+              </div>
+              <div className="card-body-editorial p-6 sm:p-8 overflow-y-auto">
+                <div className="border border-eco-900/10 mb-8 flex justify-center bg-eco-50 p-4">
+                  <img src={capturedImage.url} alt="Proof" className="max-h-[50vh] w-auto object-contain grayscale-[10%]" />
+                </div>
+                {completingTask && (
+                  <div className="flex flex-col items-center gap-4 py-8 text-eco-900 border border-eco-900/10 mb-8">
+                    <Loader className="w-5 h-5 animate-spin" />
+                    <span className="font-serif text-xl">
+                      {uploadingImage ? 'Verifying cleanliness standards...' : 'Finalizing record...'}
+                    </span>
+                  </div>
+                )}
+                <div className="flex gap-4">
+                  <button onClick={handleCompleteTask} disabled={completingTask} className="btn-editorial btn-editorial-primary flex-1">
+                    Submit Record
+                  </button>
+                  <button onClick={() => setCapturedImage(null)} disabled={completingTask} className="btn-editorial btn-editorial-secondary flex-1">
+                    Retake Image
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div>
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-xl font-extrabold text-gray-900">Cleaning Tasks</h2>
-            {tasks.length > 0 && (
-              <span className="badge badge-green">{tasks.length} active</span>
-            )}
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="font-serif text-3xl text-eco-900 tracking-tight">Assigned Tasks</h2>
           </div>
 
           {tasks.length === 0 ? (
-            <div className="dash-card">
-              <div className="empty-state">
-                <div className="empty-state-icon">
-                  <CheckCircle className="w-10 h-10 text-primary-400" />
-                </div>
-                <h3 className="text-xl font-extrabold text-gray-900 mb-2">All Clear!</h3>
-                <p className="text-gray-500 text-sm">No pending cleaning tasks at the moment.</p>
+            <div className="card-editorial">
+              <div className="card-body-editorial text-center py-24">
+                <p className="font-serif text-3xl text-eco-400 italic mb-2">Queue clear.</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-eco-500">No pending operations.</p>
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {optimizedRoute?.sequence.map((bin, index) => {
                 const task = tasks.find(t => t.id === bin.taskId)
                 if (!task) return null
-                const pInfo = getPriorityInfo(task.priority)
 
                 return (
-                  <div
-                    key={task.id}
-                    className={`dash-card ${getPriorityBorder(task.priority)} animate-fade-in-up`}
-                    style={{ animationDelay: `${index * 70}ms` }}
-                  >
-                    <div className="p-5">
-                      <div className="flex items-start gap-4">
-                        {/* Step number */}
-                        <div className="relative flex-shrink-0">
-                          <div className="w-12 h-12 rounded-xl flex items-center justify-center font-extrabold text-white text-lg shadow-sm"
-                               style={{ background: 'linear-gradient(135deg,#059669,#0891b2)' }}>
-                            #{index + 1}
-                          </div>
-                          {index < (optimizedRoute?.sequence.length || 0) - 1 && (
-                            <div className="step-connector" />
-                          )}
-                        </div>
+                  <div key={task.id} className="card-editorial flex flex-col sm:flex-row group">
+                    <div className="bg-eco-50 sm:w-32 p-6 sm:p-0 flex flex-col items-center justify-center border-b sm:border-b-0 sm:border-r border-eco-900/10">
+                      <span className="text-[10px] font-bold text-eco-400 uppercase tracking-[0.2em] mb-2">Stop</span>
+                      <span className="font-serif text-5xl text-eco-900">{index + 1}</span>
+                    </div>
 
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <h3 className="text-base font-extrabold text-gray-900">{bin.bin_code}</h3>
-                                <span className={pInfo.cls}>{pInfo.text}</span>
-                                {task.is_predicted && <span className="badge badge-purple">SCHEDULED</span>}
-                              </div>
-                              <div className="flex items-center gap-2 text-gray-500 text-sm mb-2">
-                                <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span className="truncate">{bin.location_name}</span>
-                              </div>
-                              <div className="flex items-center gap-4 text-xs text-gray-400">
-                                <span>Fill: <span className="font-bold text-gray-700">{bin.current_fill_percentage?.toFixed(0)}%</span></span>
-                                <span>Severity: <span className="font-bold text-gray-700 uppercase">{bin.current_severity}</span></span>
-                                {bin.distance && (
-                                  <span>Dist: <span className="font-bold text-gray-700">{formatDistance(bin.distance)}</span></span>
-                                )}
-                              </div>
-                            </div>
-                            <span className={`${getStatusBadge(task.status)} flex-shrink-0`}>
-                              {task.status.replace('_', ' ').toUpperCase()}
+                    <div className="p-8 flex-1 flex flex-col justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-8">
+                        <div>
+                          <div className="flex items-center gap-4 flex-wrap mb-3">
+                            <h3 className="font-serif text-3xl text-eco-900">{bin.bin_code}</h3>
+                            <span className={getPriorityBadge(task.priority)}>
+                              Priority {task.priority}
                             </span>
+                            {task.is_predicted && <span className="badge-editorial badge-slate">Scheduled</span>}
                           </div>
-
-                          {/* Scheduled note */}
-                          {task.notes && task.notes.startsWith('[SCHEDULED]') && (
-                            <div className="mt-3 bg-accent-50 border border-accent-100 rounded-xl p-3">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Clock className="w-3.5 h-3.5 text-accent-500" />
-                                <span className="text-xs font-bold text-accent-700">
-                                  {task.notes.split('|')[0].replace('[SCHEDULED]', '').trim()}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-accent-500 leading-relaxed">
-                                {task.notes.split('|').slice(1).join(' | ').trim()}
-                              </p>
+                          
+                          <div className="text-[10px] font-bold tracking-[0.2em] text-eco-600 uppercase flex flex-col gap-2">
+                            <span className="flex items-center gap-2"><MapPin className="w-3 h-3" /> {bin.location_name}</span>
+                            <div className="flex items-center gap-3 text-eco-500">
+                              <span>Fill: {bin.current_fill_percentage?.toFixed(0)}%</span>
+                              {bin.distance && (
+                                <>
+                                  <span>|</span>
+                                  <span>{formatDistance(bin.distance)}</span>
+                                </>
+                              )}
                             </div>
-                          )}
-                          {task.notes && !task.notes.startsWith('[SCHEDULED]') && (
-                            <p className="mt-2 text-xs text-gray-400 italic">{task.notes}</p>
-                          )}
-
-                          {/* Actions */}
-                          <div className="flex gap-2 mt-4 pt-4 border-t border-gray-50">
-                            {task.status === 'pending' && !task.assigned_worker_id && (
-                              <button onClick={() => handleAcceptTask(task.id)} className="btn-primary flex-1 py-2.5 text-sm">
-                                Accept Task
-                              </button>
-                            )}
-                            {task.status === 'assigned' && task.assigned_worker_id === profile.id && (
-                              <button onClick={() => handleStartTask(task.id)} className="btn-accent flex-1 py-2.5 text-sm">
-                                Start Cleaning
-                              </button>
-                            )}
-                            {task.status === 'in_progress' && (
-                              <button onClick={() => handleStartCompletion(task)} className="btn-primary flex-1 py-2.5 text-sm">
-                                <Camera className="w-4 h-4" /> Complete Task
-                              </button>
-                            )}
                           </div>
                         </div>
+                        
+                        <div className="flex justify-start sm:justify-end">
+                          <span className={getStatusBadge(task.status)}>
+                            {task.status.replace('_', ' ')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {task.notes && (
+                        <div className="mb-8 border-l border-eco-900/20 pl-4 py-2">
+                          <span className="text-[10px] font-bold text-eco-900 uppercase tracking-widest block mb-1">Directives</span>
+                          <span className="text-sm font-light text-eco-700 italic">{task.notes}</span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-eco-900/10">
+                        {task.status === 'pending' && !task.assigned_worker_id && (
+                          <button onClick={() => handleAcceptTask(task.id)} className="btn-editorial btn-editorial-secondary w-full sm:w-auto">
+                            Accept Assignment
+                          </button>
+                        )}
+                        {task.status === 'assigned' && task.assigned_worker_id === profile.id && (
+                          <button onClick={() => handleStartTask(task.id)} className="btn-editorial btn-editorial-primary w-full sm:w-auto">
+                            Commence Work
+                          </button>
+                        )}
+                        {task.status === 'in_progress' && (
+                          <button onClick={() => handleStartCompletion(task)} className="btn-editorial btn-editorial-primary w-full sm:w-auto">
+                            Finalize Task
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

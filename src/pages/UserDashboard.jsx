@@ -4,25 +4,25 @@ import { supabase } from '../lib/supabase'
 import { analyzeWasteImage } from '../lib/aiService'
 import { findNearestBin } from '../lib/routeOptimizer'
 import {
-  Camera, Loader, CheckCircle, XCircle, Upload,
-  MapPin, Leaf, LogOut, Clock, Sparkles, ChevronRight
+  Camera, Loader, CheckCircle, Upload,
+  MapPin, Leaf, LogOut, Clock, Sparkles, AlertCircle
 } from 'lucide-react'
 
 export default function UserDashboard() {
   const { profile, signOut } = useAuth()
-  const [location, setLocation]       = useState(null)
-  const [nearestBin, setNearestBin]   = useState(null)
-  const [capturing, setCapturing]     = useState(false)
-  const [analyzing, setAnalyzing]     = useState(false)
+  const [location, setLocation] = useState(null)
+  const [nearestBin, setNearestBin] = useState(null)
+  const [capturing, setCapturing] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
   const [capturedImage, setCapturedImage] = useState(null)
-  const [analysis, setAnalysis]       = useState(null)
-  const [error, setError]             = useState('')
-  const [success, setSuccess]         = useState('')
-  const [myReports, setMyReports]     = useState([])
+  const [analysis, setAnalysis] = useState(null)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [myReports, setMyReports] = useState([])
   const [showOptions, setShowOptions] = useState(false)
 
-  const videoRef    = useRef(null)
-  const streamRef   = useRef(null)
+  const videoRef = useRef(null)
+  const streamRef = useRef(null)
   const fileInputRef = useRef(null)
 
   useEffect(() => { fetchMyReports() }, [])
@@ -45,7 +45,7 @@ export default function UserDashboard() {
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
       () => resolve({
-        latitude:  parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LAT || 19.0222),
+        latitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LAT || 19.0222),
         longitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LNG || 72.8561),
         accuracy: null, isFallback: true
       }),
@@ -53,15 +53,11 @@ export default function UserDashboard() {
     )
   })
 
-  const handleStartReport = () => {
-    setError(''); setSuccess(''); setAnalysis(null); setCapturedImage(null); setShowOptions(true)
-  }
-
   const setupLocationAndBin = async () => {
-    setError('Getting your location…')
+    setError('Getting location...')
     const userLocation = await getUserLocation()
     setLocation(userLocation)
-    if (userLocation.isFallback) setError('Using campus center location (GPS unavailable)')
+    if (userLocation.isFallback) setError('Using campus center (GPS off)')
     else setError('')
 
     const { data: bins, error: binsError } = await supabase.from('bins').select('*').eq('is_active', true)
@@ -81,7 +77,7 @@ export default function UserDashboard() {
       setCapturing(true)
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       if (videoRef.current) { videoRef.current.srcObject = stream; streamRef.current = stream }
-    } catch (err) { setError('Failed to start camera: ' + err.message) }
+    } catch (err) { setError('Camera failed: ' + err.message) }
   }
 
   const handleFileUpload = async () => {
@@ -89,14 +85,14 @@ export default function UserDashboard() {
     try {
       await setupLocationAndBin()
       fileInputRef.current?.click()
-    } catch (err) { setError('Failed to get location: ' + err.message) }
+    } catch (err) { setError('Location failed: ' + err.message) }
   }
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) return setError('Please select an image file')
-    if (file.size > 5 * 1024 * 1024) return setError('Image too large. Max 5 MB')
+    if (!file.type.startsWith('image/')) return setError('Please select an image')
+    if (file.size > 5 * 1024 * 1024) return setError('Image too large (max 5MB)')
     setCapturedImage(URL.createObjectURL(file))
     await analyzeImage(file)
   }
@@ -151,7 +147,7 @@ export default function UserDashboard() {
       setSuccess('Report submitted successfully!')
       fetchMyReports()
     } catch (err) {
-      setError('Failed to analyze: ' + err.message)
+      setError('Analysis failed: ' + err.message)
     } finally {
       setAnalyzing(false)
     }
@@ -167,85 +163,59 @@ export default function UserDashboard() {
     setLocation(null); setError(''); setSuccess('')
   }
 
-  const getFillColor = (pct) => {
-    if (pct > 70) return 'from-red-500 to-red-400'
-    if (pct > 40) return 'from-amber-500 to-yellow-400'
-    return 'from-emerald-500 to-green-400'
-  }
-
   const getSeverityBadge = (s) => {
-    const map = { high: 'badge badge-red', medium: 'badge badge-yellow', low: 'badge badge-green' }
-    return map[s] || 'badge bg-gray-100 text-gray-600'
-  }
-
-  const getSeverityBorderClass = (s) => {
-    const map = { high: 'border-l-red-500', medium: 'border-l-amber-500', low: 'border-l-emerald-500' }
-    return map[s] || 'border-l-gray-200'
+    const map = { high: 'badge-red', medium: 'badge-yellow', low: 'badge-eco' }
+    return `badge-editorial ${map[s] || 'badge-slate'}`
   }
 
   return (
-    <div className="min-h-screen bg-mesh">
-      {/* ── NAV ── */}
+    <div className="min-h-screen">
       <nav className="nav-header">
-        <div className="max-w-5xl mx-auto px-5 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                 style={{ background: 'linear-gradient(135deg,#10b981,#0891b2)' }}>
-              <Leaf className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-base font-extrabold text-white tracking-tight leading-none">EcoWatch</h1>
-              <p className="text-primary-300 text-xs mt-0.5">{profile?.full_name}</p>
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Leaf className="w-5 h-5 text-eco-900" strokeWidth={1.5} />
+            <div className="flex items-center gap-4">
+              <h1 className="font-serif text-lg tracking-[0.2em] text-eco-900 uppercase">EcoWatch</h1>
+              <span className="text-eco-300">|</span>
+              <p className="text-[10px] font-bold tracking-[0.2em] text-eco-600 uppercase">{profile?.full_name}</p>
             </div>
           </div>
-          <button
-            onClick={signOut}
-            className="flex items-center gap-2 text-white/70 hover:text-white hover:bg-white/10 px-4 py-2 rounded-xl transition-all duration-200 text-sm font-medium"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
+          <button onClick={signOut} className="btn-editorial-ghost">
+            Sign out
           </button>
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-5 py-8">
+      <div className="dashboard-container max-w-4xl">
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
 
-        {/* ── Status Messages ── */}
         {error && (
-          <div className="alert-error mb-5">
-            <XCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
-            <span className="text-sm">{error}</span>
+          <div className="alert-error mb-10">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
         {success && (
-          <div className="alert-success mb-5">
-            <CheckCircle className="w-5 h-5 flex-shrink-0 text-emerald-500" />
-            <span className="text-sm font-medium">{success}</span>
+          <div className="alert-success mb-10">
+            <CheckCircle className="w-5 h-5 flex-shrink-0" />
+            <span>{success}</span>
           </div>
         )}
 
-        {/* ── Options Modal ── */}
         {showOptions && (
-          <div className="modal-overlay">
-            <div className="glass rounded-3xl p-7 max-w-sm w-full shadow-card-lg animate-scale-in">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                     style={{ background: 'linear-gradient(135deg,#059669,#0891b2)' }}>
-                  <Camera className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-extrabold text-gray-900">Choose Image Source</h3>
-                <p className="text-gray-500 text-sm mt-1">How would you like to provide the bin image?</p>
+          <div className="modal-overlay-editorial">
+            <div className="card-editorial w-full max-w-md bg-white">
+              <div className="card-header-editorial">
+                <h3 className="font-serif text-2xl text-eco-900">Select Source</h3>
               </div>
-              <div className="space-y-3">
-                <button onClick={handleCameraCapture} className="btn-primary w-full py-3.5">
-                  <Camera className="w-5 h-5" /> Capture with Camera
+              <div className="card-body-editorial space-y-4">
+                <button onClick={handleCameraCapture} className="btn-editorial btn-editorial-primary w-full">
+                  <Camera className="w-4 h-4 mr-3" /> Camera
                 </button>
-                <button onClick={handleFileUpload} className="btn-secondary w-full py-3.5">
-                  <Upload className="w-5 h-5" /> Upload from Gallery
+                <button onClick={handleFileUpload} className="btn-editorial btn-editorial-secondary w-full">
+                  <Upload className="w-4 h-4 mr-3" /> Upload File
                 </button>
-                <button onClick={() => setShowOptions(false)}
-                  className="w-full py-3 text-gray-500 hover:text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium text-sm">
+                <button onClick={() => setShowOptions(false)} className="btn-editorial btn-editorial-ghost w-full mt-4">
                   Cancel
                 </button>
               </div>
@@ -253,232 +223,160 @@ export default function UserDashboard() {
           </div>
         )}
 
-        {/* ── Main Action Card ── */}
         {!capturing && !capturedImage && !showOptions && (
-          <div className="dash-card mb-8 animate-fade-in-up">
-            <div className="p-10 text-center">
-              {/* Hero icon */}
-              <div className="relative inline-flex mb-7">
-                <div className="w-28 h-28 rounded-3xl flex items-center justify-center shadow-glow-primary animate-bounce-gentle"
-                     style={{ background: 'linear-gradient(135deg,#059669,#0891b2)' }}>
-                  <Camera className="w-14 h-14 text-white" />
-                </div>
-                <span className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-accent-500 flex items-center justify-center shadow-glow-accent">
-                  <Sparkles className="w-4 h-4 text-white" />
-                </span>
-              </div>
-              <h2 className="text-3xl font-extrabold text-gray-900 mb-3 tracking-tight">
-                Report a Waste Bin
-              </h2>
-              <p className="text-gray-500 mb-8 max-w-sm mx-auto leading-relaxed">
-                Capture or upload a photo. Our AI instantly analyzes the fill level, waste type, and severity.
+          <div className="card-editorial mb-12">
+            <div className="card-body-editorial flex flex-col items-center text-center py-20 px-8">
+              <Leaf className="w-10 h-10 text-eco-300 mb-8" strokeWidth={1} />
+              <h2 className="font-serif text-5xl text-eco-900 mb-6 tracking-tight">Report an Incident</h2>
+              <p className="text-eco-600 font-light max-w-md text-base leading-relaxed mb-10">
+                Submit photographic evidence. Our AI analysis will determine fill levels and deploy appropriate personnel.
               </p>
-              <button onClick={handleStartReport} className="btn-primary px-10 py-3.5 text-base">
-                <Sparkles className="w-5 h-5" /> Start Report
+              <button onClick={() => { setError(''); setSuccess(''); setShowOptions(true) }} className="btn-editorial btn-editorial-primary">
+                Initialize Report
               </button>
-            </div>
-
-            {/* Stats strip */}
-            <div className="border-t border-gray-50 grid grid-cols-3 divide-x divide-gray-50">
-              {[
-                { label: 'AI Powered', sub: 'Gemini Vision' },
-                { label: 'Real-time', sub: 'Instant results' },
-                { label: 'Secure', sub: 'Supabase backend' },
-              ].map(({ label, sub }) => (
-                <div key={label} className="py-4 px-6 text-center">
-                  <p className="text-xs font-bold text-gray-800">{label}</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>
-                </div>
-              ))}
             </div>
           </div>
         )}
 
-        {/* ── Camera Capture ── */}
         {capturing && (
-          <div className="dash-card p-6 mb-8 animate-fade-in">
-            {/* Location info */}
-            <div className="grid md:grid-cols-3 gap-3 mb-5">
-              {location && (
-                <div className="info-tile bg-secondary-50 border border-secondary-100">
-                  <div className="info-tile-label flex items-center gap-1.5">
-                    <MapPin className="w-3 h-3 text-secondary-500" /> Location
+          <div className="card-editorial mb-12">
+            <div className="card-header-editorial">
+              <h3 className="font-serif text-3xl text-eco-900">Capture Proof</h3>
+            </div>
+            <div className="card-body-editorial p-6 sm:p-8">
+              <div className="flex flex-col sm:flex-row gap-6 mb-6">
+                {location && (
+                  <div className="flex-1 border-b border-eco-900/10 pb-4">
+                    <p className="text-[10px] font-bold text-eco-400 uppercase tracking-widest mb-1 flex items-center gap-1"><MapPin className="w-3 h-3"/> Coordinates</p>
+                    <p className="text-sm font-mono text-eco-900">{location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}</p>
                   </div>
-                  <p className="text-xs text-secondary-700 font-mono">
-                    {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-                  </p>
-                  {location.accuracy && (
-                    <p className="text-[10px] text-secondary-400 mt-0.5">±{Math.round(location.accuracy)}m</p>
-                  )}
-                </div>
-              )}
-              {nearestBin && (
-                <div className="info-tile bg-primary-50 border border-primary-100 md:col-span-2">
-                  <div className="info-tile-label flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded bg-primary-500 flex items-center justify-center">
-                      <span className="text-[7px] font-bold text-white">B</span>
-                    </div>
-                    Nearest Bin
-                  </div>
-                  <p className="text-sm font-extrabold text-primary-900">{nearestBin.bin_code}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-primary-700">{nearestBin.location_name}</span>
-                    <span className="badge badge-green">{Math.round(nearestBin.distance)}m away</span>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="relative bg-dark rounded-2xl overflow-hidden mb-4 ring-1 ring-white/5">
-              <video ref={videoRef} autoPlay playsInline className="w-full" />
-              <div className="absolute inset-0 pointer-events-none"
-                   style={{ boxShadow: 'inset 0 0 40px rgba(0,0,0,0.4)' }} />
-            </div>
-            <div className="flex gap-3">
-              <button onClick={handleCapture} className="btn-primary flex-1 py-3">
-                <Camera className="w-5 h-5" /> Capture Image
-              </button>
-              <button onClick={handleCancel} className="btn-ghost border border-gray-200 px-6">
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Analysis Results ── */}
-        {capturedImage && (
-          <div className="dash-card p-6 mb-8 animate-fade-in-up">
-            <div className="flex items-center gap-2.5 mb-6">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                   style={{ background: 'linear-gradient(135deg,#059669,#0891b2)' }}>
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-extrabold text-gray-900">AI Analysis</h3>
-                <p className="text-xs text-gray-400">Powered by Gemini Vision</p>
-              </div>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <img src={capturedImage} alt="Captured" className="w-full rounded-2xl border border-gray-100 shadow-sm object-cover" />
+                )}
                 {nearestBin && (
-                  <div className="mt-3 flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-xl px-3 py-2">
-                    <MapPin className="w-4 h-4 text-primary-500 flex-shrink-0" />
-                    <span className="font-semibold">{nearestBin.bin_code}</span>
-                    <span className="text-gray-300">·</span>
-                    <span className="truncate">{nearestBin.location_name}</span>
+                  <div className="flex-1 border-b border-eco-900/10 pb-4">
+                    <p className="text-[10px] font-bold text-eco-600 uppercase tracking-widest mb-1 flex items-center gap-1">Detected Target</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-serif text-lg text-eco-900">{nearestBin.bin_code}</p>
+                      <span className="text-xs text-eco-500 font-mono">{Math.round(nearestBin.distance)}m</span>
+                    </div>
                   </div>
                 )}
               </div>
-
-              <div className="space-y-4">
-                {analyzing ? (
-                  <div className="flex flex-col items-center justify-center h-full py-12">
-                    <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
-                         style={{ background: 'linear-gradient(135deg,#ecfdf5,#d1fae5)' }}>
-                      <Loader className="w-10 h-10 animate-spin text-primary-600" />
-                    </div>
-                    <p className="text-gray-700 font-semibold">Analyzing with Gemini AI…</p>
-                    <p className="text-xs text-gray-400 mt-1">Detecting fill level & waste type</p>
-                  </div>
-                ) : analysis ? (
-                  <>
-                    {/* Fill Level */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="info-tile-label">Fill Level</span>
-                        <span className="text-3xl font-extrabold text-gray-900">
-                          {analysis.fillPercentage.toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="bg-gray-100 rounded-full h-3 overflow-hidden">
-                        <div
-                          className={`bg-gradient-to-r ${getFillColor(analysis.fillPercentage)} h-full rounded-full transition-all duration-700 ease-out`}
-                          style={{ width: `${analysis.fillPercentage}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Info grid */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="info-tile bg-gray-50 border border-gray-100">
-                        <div className="info-tile-label">Severity</div>
-                        <span className={getSeverityBadge(analysis.severity)}>
-                          {analysis.severity.toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="info-tile bg-gray-50 border border-gray-100">
-                        <div className="info-tile-label">Confidence</div>
-                        <p className="text-xl font-extrabold text-gray-900 mt-0.5">{analysis.confidence.toFixed(0)}%</p>
-                      </div>
-                    </div>
-
-                    <div className="info-tile bg-gray-50 border border-gray-100">
-                      <div className="info-tile-label">Waste Type</div>
-                      <p className="text-sm font-semibold text-gray-900 mt-0.5">{analysis.wasteType}</p>
-                    </div>
-
-                    <div className="info-tile bg-gray-50 border border-gray-100">
-                      <div className="info-tile-label">Observations</div>
-                      <p className="text-sm text-gray-600 leading-relaxed mt-0.5">{analysis.observations}</p>
-                    </div>
-
-                    <button onClick={handleReset} className="btn-primary w-full py-3">
-                      <Camera className="w-5 h-5" /> Submit Another Report
-                    </button>
-                  </>
-                ) : null}
+              <div className="relative border border-eco-900/10 bg-eco-50 mb-8 aspect-[4/3] sm:aspect-video flex items-center justify-center">
+                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover grayscale-[20%]" />
+              </div>
+              <div className="flex gap-4">
+                <button onClick={handleCapture} className="btn-editorial btn-editorial-primary flex-1">
+                  Capture Image
+                </button>
+                <button onClick={handleCancel} className="btn-editorial btn-editorial-secondary flex-1">
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── Recent Reports ── */}
-        <div className="dash-card animate-fade-in">
-          <div className="px-6 py-5 border-b border-gray-50 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-extrabold text-gray-900">Recent Reports</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Your last {myReports.length || 0} submissions</p>
+        {capturedImage && (
+          <div className="card-editorial mb-12">
+            <div className="card-header-editorial">
+              <h3 className="font-serif text-3xl text-eco-900 flex items-center gap-3">
+                <Sparkles className="w-5 h-5 text-eco-400" />
+                Diagnostic Analysis
+              </h3>
             </div>
-            {myReports.length > 0 && (
-              <span className="text-xs text-gray-400">{myReports.length} report{myReports.length !== 1 ? 's' : ''}</span>
-            )}
+            <div className="card-body-editorial p-0">
+              <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-eco-900/10">
+                <div className="p-8">
+                  <div className="border border-eco-900/10 mb-6 relative">
+                    <img src={capturedImage} alt="Captured" className="w-full h-auto object-cover grayscale-[10%]" />
+                    {nearestBin && (
+                      <div className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur border border-eco-900/10 p-3 flex items-center gap-3">
+                        <MapPin className="w-4 h-4 text-eco-500" />
+                        <div>
+                          <p className="text-sm font-bold text-eco-900">{nearestBin.bin_code}</p>
+                          <p className="text-[10px] uppercase tracking-wider text-eco-500">{nearestBin.location_name}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-8 flex flex-col justify-center">
+                  {analyzing ? (
+                    <div className="text-center">
+                      <Loader className="w-6 h-6 animate-spin text-eco-300 mx-auto mb-4" />
+                      <p className="font-serif text-2xl text-eco-900 mb-2">Analyzing...</p>
+                      <p className="text-xs font-light text-eco-500 uppercase tracking-widest">Evaluating parameters</p>
+                    </div>
+                  ) : analysis ? (
+                    <div className="space-y-8">
+                      <div>
+                        <div className="flex justify-between items-end mb-3">
+                          <span className="text-[10px] font-bold text-eco-500 tracking-[0.2em] uppercase">Fill Volume</span>
+                          <span className="font-serif text-4xl text-eco-900">{analysis.fillPercentage.toFixed(0)}<span className="text-xl text-eco-400 font-sans">%</span></span>
+                        </div>
+                        <div className="h-1 w-full bg-eco-100 relative">
+                          <div className={`absolute top-0 left-0 h-full transition-all duration-1000 ${analysis.fillPercentage > 70 ? 'bg-accent' : 'bg-eco-900'}`} style={{ width: `${analysis.fillPercentage}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-8">
+                        <div>
+                          <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest block mb-2">Severity</span>
+                          <span className={getSeverityBadge(analysis.severity)}>{analysis.severity}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest block mb-2">Confidence</span>
+                          <span className="font-mono text-lg text-eco-900">{analysis.confidence.toFixed(0)}%</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-eco-900/10">
+                        <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest block mb-2">Classification</span>
+                        <span className="font-serif text-xl text-eco-900">{analysis.wasteType}</span>
+                      </div>
+
+                      <button onClick={handleReset} className="btn-editorial btn-editorial-secondary w-full mt-4">
+                        Submit Next Report
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="card-editorial">
+          <div className="card-header-editorial">
+            <h3 className="font-serif text-2xl text-eco-900">Recent Logs</h3>
+            <span className="text-xs font-mono text-eco-500">{myReports.length} ENTRIES</span>
           </div>
 
           {myReports.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">
-                <Camera className="w-10 h-10 text-primary-400" />
-              </div>
-              <p className="text-gray-600 font-semibold">No reports yet</p>
-              <p className="text-xs text-gray-400 mt-1">Submit your first bin report above</p>
+            <div className="card-body-editorial text-center py-16">
+              <p className="font-serif text-2xl text-eco-400 italic">No logs found.</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
-              {myReports.map((report, i) => (
-                <div
-                  key={report.id}
-                  className={`px-6 py-4 border-l-4 ${getSeverityBorderClass(report.severity)} hover:bg-gray-50/60 transition-colors duration-150`}
-                  style={{ animationDelay: `${i * 80}ms` }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-bold text-gray-900 text-sm">{report.bins?.bin_code}</p>
-                        <span className="text-gray-300">·</span>
-                        <p className="text-sm text-gray-500 truncate">{report.bins?.location_name}</p>
+            <div className="divide-y divide-eco-900/10">
+              {myReports.map((report) => (
+                <div key={report.id} className="p-8 hover:bg-eco-50/50 transition-colors">
+                  <div className="flex flex-col sm:flex-row justify-between gap-6">
+                    <div>
+                      <div className="flex items-center gap-4 mb-3">
+                        <span className="font-serif text-2xl text-eco-900">{report.bins?.bin_code}</span>
+                        <span className={getSeverityBadge(report.severity)}>{report.severity}</span>
                       </div>
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
-                        <span>Fill: <span className="font-semibold text-gray-700">{report.fill_percentage?.toFixed(0)}%</span></span>
-                        <span className="text-gray-200">|</span>
-                        <span>{report.waste_type}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <Clock className="w-3 h-3 text-gray-300" />
-                        <span className="text-[11px] text-gray-400">{new Date(report.created_at).toLocaleString()}</span>
+                      <p className="text-xs font-bold tracking-widest uppercase text-eco-600 mb-2">{report.bins?.location_name}</p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-mono text-eco-800">{report.fill_percentage?.toFixed(0)}% FULL</span>
+                        <span className="text-eco-300">|</span>
+                        <span className="text-xs text-eco-500 uppercase">{report.waste_type}</span>
                       </div>
                     </div>
-                    <span className={getSeverityBadge(report.severity)}>{report.severity?.toUpperCase()}</span>
+                    <div className="text-[10px] font-bold tracking-[0.2em] text-eco-400 sm:text-right uppercase">
+                      {new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
                   </div>
                 </div>
               ))}
