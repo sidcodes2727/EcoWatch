@@ -174,7 +174,7 @@ export async function verifyCleaningImage(imageFile) {
     console.log('🧹 Verifying bin cleanliness with AI...')
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash'
+      model: 'gemini-3.5-flash-lite'
     })
 
     const base64Image = await fileToBase64(imageFile)
@@ -344,20 +344,20 @@ function blobToBase64(blob) {
 export async function generateCleaningSchedule(historicalData) {
   try {
     console.log('📅 Generating predictive schedule...')
-    
+
     // In a real implementation, you would pass historicalData to Gemini to analyze patterns.
     // Since we're constrained by token limits and context, we'll implement a mock predictive
     // logic based on the data that simulates an AI response.
-    
+
     // Fake delay to simulate AI processing
     await new Promise(r => setTimeout(r, 2000))
-    
+
     // Group by bin
     const binStats = {}
     historicalData.forEach(r => {
       if (!binStats[r.binId]) {
-        binStats[r.binId] = { 
-          binCode: r.binCode, 
+        binStats[r.binId] = {
+          binCode: r.binCode,
           locationName: r.locationName,
           department: r.department,
           reports: 0,
@@ -367,16 +367,16 @@ export async function generateCleaningSchedule(historicalData) {
       binStats[r.binId].reports++
       binStats[r.binId].avgFill += r.fillPercentage
     })
-    
+
     const schedule = Object.entries(binStats).map(([binId, stats]) => {
       stats.avgFill = stats.avgFill / stats.reports
       let priority = 'low'
       if (stats.avgFill > 70 || stats.reports > 3) priority = 'high'
       else if (stats.avgFill > 40 || stats.reports > 1) priority = 'medium'
-      
+
       const timeSlots = ['morning', 'midday', 'afternoon', 'evening']
       const randomSlot = timeSlots[Math.floor(Math.random() * timeSlots.length)]
-      
+
       return {
         binId,
         binCode: stats.binCode,
@@ -390,7 +390,7 @@ export async function generateCleaningSchedule(historicalData) {
         wasteType: 'Mixed Waste'
       }
     }).filter(s => s.priority !== 'low')
-    
+
     return {
       schedule,
       stats: {

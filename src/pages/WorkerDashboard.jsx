@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { verifyCleaningImage } from '../lib/aiService'
 import { optimizeRoute, formatDistance, formatTime, getTotalEstimatedTime } from '../lib/routeOptimizer'
 import {
   Camera, MapPin, CheckCircle, Navigation,
-  Loader, Upload, Leaf, AlertCircle
+  Loader, Upload, Leaf, AlertCircle, Clock
 } from 'lucide-react'
 
 export default function WorkerDashboard() {
@@ -18,8 +18,43 @@ export default function WorkerDashboard() {
   const [capturedImage, setCapturedImage] = useState(null)
   const [capturing, setCapturing] = useState(false)
   const [showCompletionOptions, setShowCompletionOptions] = useState(false)
+  const [verificationResult, setVerificationResult] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('optimized')
+
+  const displayedTasks = useMemo(() => {
+    let list = []
+    
+    if (optimizedRoute && optimizedRoute.sequence.length > 0) {
+      list = optimizedRoute.sequence.map(bin => {
+        const task = tasks.find(t => t.id === bin.taskId)
+        return task ? { ...task, displayBin: bin } : null
+      }).filter(Boolean)
+    } else {
+      list = tasks.filter(t => t.status !== 'completed').map(task => ({
+        ...task, displayBin: task.bins
+      }))
+    }
+    
+    list = list.filter(task => {
+      if (statusFilter !== 'all' && task.status !== statusFilter) return false
+      if (priorityFilter !== 'all' && task.priority.toString() !== priorityFilter) return false
+      return true
+    })
+    
+    if (sortBy === 'priority') {
+      list.sort((a, b) => a.priority - b.priority)
+    } else if (sortBy === 'newest') {
+      list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    } else if (sortBy === 'oldest') {
+      list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    }
+    
+    return list
+  }, [tasks, optimizedRoute, statusFilter, priorityFilter, sortBy])
 
   const videoRef = useRef(null)
   const streamRef = useRef(null)
@@ -123,8 +158,13 @@ export default function WorkerDashboard() {
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out')), 15000))
         ])
         if (!verification.isCleaned) {
-          setError(`Verification failed: ${verification.notes} (Fill: ${verification.fillPercentage}%). Please re-clean.`)
-          setCompletingTask(false); setUploadingImage(false); return
+          setVerificationResult({
+            success: false,
+            title: 'Verification Failed',
+            message: 'The AI detected that the bin is not properly cleaned.',
+            details: `Reason: ${verification.notes} (Remaining fill: ${verification.fillPercentage}%)`
+          })
+          setCompletingTask(false); setUploadingImage(false); setCapturedImage(null); return
         }
       } catch { verification = { isCleaned: true, fillPercentage: 0 } }
 
@@ -145,9 +185,13 @@ export default function WorkerDashboard() {
         .update({ current_fill_percentage: verification.fillPercentage || 0, current_severity: 'low', last_cleaned_at: endTime.toISOString() })
         .eq('id', selectedTask.bin_id)
 
-      setSuccess('Task marked as complete.')
       setSelectedTask(null); setCapturedImage(null); fetchTasks()
-      setTimeout(() => setSuccess(''), 3000)
+      setVerificationResult({
+        success: true,
+        title: 'Verification Successful',
+        message: 'The bin has been verified as clean.',
+        details: 'Great job! The task has been marked as complete.'
+      })
     } catch (err) {
       setError('Failed to complete: ' + err.message)
     } finally {
@@ -304,11 +348,43 @@ export default function WorkerDashboard() {
         )}
 
         <div>
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
             <h2 className="font-serif text-3xl text-eco-900 tracking-tight">Assigned Tasks</h2>
+            <div className="flex gap-4">
+              <select 
+                value={statusFilter} 
+                onChange={e => setStatusFilter(e.target.value)}
+                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="assigned">Assigned</option>
+                <option value="in_progress">In Progress</option>
+              </select>
+              <select 
+                value={priorityFilter} 
+                onChange={e => setPriorityFilter(e.target.value)}
+                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+              >
+                <option value="all">All Priorities</option>
+                <option value="1">Priority 1</option>
+                <option value="2">Priority 2</option>
+                <option value="3">Priority 3</option>
+              </select>
+              <select 
+                value={sortBy} 
+                onChange={e => setSortBy(e.target.value)}
+                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+              >
+                <option value="optimized">Optimized Route</option>
+                <option value="priority">Highest Priority</option>
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+              </select>
+            </div>
           </div>
 
-          {tasks.length === 0 ? (
+          {displayedTasks.length === 0 ? (
             <div className="card-editorial">
               <div className="card-body-editorial text-center py-24">
                 <p className="font-serif text-3xl text-eco-400 italic mb-2">Queue clear.</p>
@@ -317,9 +393,8 @@ export default function WorkerDashboard() {
             </div>
           ) : (
             <div className="space-y-6">
-              {optimizedRoute?.sequence.map((bin, index) => {
-                const task = tasks.find(t => t.id === bin.taskId)
-                if (!task) return null
+              {displayedTasks.map((task, index) => {
+                const bin = task.displayBin
 
                 return (
                   <div key={task.id} className="card-editorial flex flex-col sm:flex-row group">
@@ -338,7 +413,7 @@ export default function WorkerDashboard() {
                             </span>
                             {task.is_predicted && <span className="badge-editorial badge-slate">Scheduled</span>}
                           </div>
-                          
+
                           <div className="text-[10px] font-bold tracking-[0.2em] text-eco-600 uppercase flex flex-col gap-2">
                             <span className="flex items-center gap-2"><MapPin className="w-3 h-3" /> {bin.location_name}</span>
                             <div className="flex items-center gap-3 text-eco-500">
@@ -352,11 +427,18 @@ export default function WorkerDashboard() {
                             </div>
                           </div>
                         </div>
-                        
-                        <div className="flex justify-start sm:justify-end">
+
+                        <div className="flex flex-col items-start sm:items-end gap-2">
                           <span className={getStatusBadge(task.status)}>
                             {task.status.replace('_', ' ')}
                           </span>
+                          <div className="text-[10px] font-mono text-eco-400 mt-1 sm:text-right">
+                            <div className="flex items-center sm:justify-end gap-1 mb-1">
+                              <Clock className="w-3 h-3" />
+                              <span>Reported: {new Date(task.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <span>{new Date(task.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          </div>
                         </div>
                       </div>
 
@@ -391,6 +473,28 @@ export default function WorkerDashboard() {
             </div>
           )}
         </div>
+
+        {verificationResult && (
+          <div className="modal-overlay-editorial z-[100]">
+            <div className="card-editorial w-full max-w-md bg-white text-center">
+              <div className={`card-header-editorial flex flex-col items-center justify-center gap-4 py-8 ${verificationResult.success ? 'bg-eco-900 text-white border-none' : 'bg-red-50 text-red-900 border-b border-red-200'}`}>
+                {verificationResult.success ? <CheckCircle className="w-12 h-12 text-eco-400" /> : <AlertCircle className="w-12 h-12 text-red-500" />}
+                <h3 className="font-serif text-3xl">{verificationResult.title}</h3>
+              </div>
+              <div className="card-body-editorial p-8">
+                <p className="text-lg font-medium text-eco-900 mb-2">{verificationResult.message}</p>
+                <p className="text-sm font-light text-eco-600 mb-8 italic">{verificationResult.details}</p>
+                <button
+                  onClick={() => setVerificationResult(null)}
+                  className={`btn-editorial w-full ${verificationResult.success ? 'btn-editorial-primary' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                >
+                  {verificationResult.success ? 'Continue to Next Task' : 'I will re-clean it'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )

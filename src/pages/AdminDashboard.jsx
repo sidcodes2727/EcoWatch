@@ -421,10 +421,10 @@ export default function AdminDashboard() {
                     <p className="text-xs font-bold uppercase tracking-widest text-eco-600 mb-1">{report.bins?.location_name}</p>
                     <p className="text-[10px] font-light text-eco-500 italic">Logged by {report.reporter?.full_name}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end gap-1">
                     <div className="font-serif text-2xl text-eco-900">{report.fill_percentage}<span className="text-sm font-sans text-eco-400">%</span></div>
-                    <span className="text-[10px] font-mono text-eco-400 mt-1 block">
-                      {new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <span className="text-[10px] font-mono text-eco-400 block">
+                      {new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 </div>
@@ -455,9 +455,12 @@ export default function AdminDashboard() {
                         Operator: {task.profiles?.full_name || 'Unassigned'}
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-1">
                       <span className={getTaskStatusBadge(task.status)}>
                         {task.status.replace('_', ' ')}
+                      </span>
+                      <span className="text-[10px] font-mono text-eco-400 block mt-1">
+                        {new Date(task.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                   </div>

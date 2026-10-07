@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { analyzeWasteImage } from '../lib/aiService'
@@ -20,6 +20,25 @@ export default function UserDashboard() {
   const [success, setSuccess] = useState('')
   const [myReports, setMyReports] = useState([])
   const [showOptions, setShowOptions] = useState(false)
+  const [severityFilter, setSeverityFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('newest')
+
+  const displayedReports = useMemo(() => {
+    let list = [...myReports]
+    list = list.filter(report => severityFilter === 'all' || report.severity === severityFilter)
+    
+    if (sortBy === 'newest') {
+      list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    } else if (sortBy === 'oldest') {
+      list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    } else if (sortBy === 'severity') {
+      const sMap = { high: 3, medium: 2, low: 1 }
+      list.sort((a, b) => (sMap[b.severity] || 0) - (sMap[a.severity] || 0))
+    } else if (sortBy === 'fill') {
+      list.sort((a, b) => b.fill_percentage - a.fill_percentage)
+    }
+    return list
+  }, [myReports, severityFilter, sortBy])
 
   const videoRef = useRef(null)
   const streamRef = useRef(null)
@@ -348,18 +367,42 @@ export default function UserDashboard() {
         )}
 
         <div className="card-editorial">
-          <div className="card-header-editorial">
-            <h3 className="font-serif text-2xl text-eco-900">Recent Logs</h3>
-            <span className="text-xs font-mono text-eco-500">{myReports.length} ENTRIES</span>
+          <div className="card-header-editorial flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-serif text-2xl text-eco-900">Recent Logs</h3>
+              <span className="text-xs font-mono text-eco-500">{myReports.length} ENTRIES</span>
+            </div>
+            <div className="flex gap-4">
+              <select 
+                value={severityFilter} 
+                onChange={e => setSeverityFilter(e.target.value)}
+                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+              >
+                <option value="all">All Severities</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+              <select 
+                value={sortBy} 
+                onChange={e => setSortBy(e.target.value)}
+                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="severity">Highest Severity</option>
+                <option value="fill">Highest Fill</option>
+              </select>
+            </div>
           </div>
 
-          {myReports.length === 0 ? (
+          {displayedReports.length === 0 ? (
             <div className="card-body-editorial text-center py-16">
               <p className="font-serif text-2xl text-eco-400 italic">No logs found.</p>
             </div>
           ) : (
             <div className="divide-y divide-eco-900/10">
-              {myReports.map((report) => (
+              {displayedReports.map((report) => (
                 <div key={report.id} className="p-8 hover:bg-eco-50/50 transition-colors">
                   <div className="flex flex-col sm:flex-row justify-between gap-6">
                     <div>
@@ -374,8 +417,9 @@ export default function UserDashboard() {
                         <span className="text-xs text-eco-500 uppercase">{report.waste_type}</span>
                       </div>
                     </div>
-                    <div className="text-[10px] font-bold tracking-[0.2em] text-eco-400 sm:text-right uppercase">
-                      {new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    <div className="text-[10px] font-bold tracking-[0.2em] text-eco-400 sm:text-right uppercase flex flex-col gap-1 items-start sm:items-end">
+                      <span>{new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      <span className="font-mono">{new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
                 </div>
