@@ -13,7 +13,7 @@ export async function analyzeWasteImage(imageFile) {
 
     // Try the latest Gemini Flash model first (faster and more reliable)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash'
+      model: 'gemini-1.5-flash'
     })
 
     // Convert image to base64
@@ -98,7 +98,7 @@ IMPORTANT: If the bin looks FULL, give it 80-100% fill percentage. Be HONEST abo
       console.log('🔄 Trying fallback model: gemini-1.5-flash...')
 
       const fallbackModel = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash'
+        model: 'gemini-3.5-flash-lite'
       })
 
       const base64Image = await fileToBase64(imageFile)
@@ -174,7 +174,7 @@ export async function verifyCleaningImage(imageFile) {
     console.log('🧹 Verifying bin cleanliness with AI...')
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash'
+      model: 'gemini-1.5-flash'
     })
 
     const base64Image = await fileToBase64(imageFile)
@@ -241,7 +241,7 @@ export async function compareImages(originalImageUrl, completionImageFile) {
     console.log('🔄 Comparing images with AI...')
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash'
+      model: 'gemini-1.5-flash'
     })
 
     // Fetch the original image

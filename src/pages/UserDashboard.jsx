@@ -217,6 +217,12 @@ export default function UserDashboard() {
       const result = await analyzeWasteImage(imageFile)
       setAnalysis(result)
 
+      // Prevent submission if fill percentage is below 30%
+      if (result.fillPercentage < 30) {
+        setSuccess(`Bin is mostly empty (${result.fillPercentage.toFixed(0)}%). No report needed!`)
+        return
+      }
+
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('waste-images')
