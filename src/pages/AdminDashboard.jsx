@@ -290,12 +290,14 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
+      <div className="min-h-screen flex items-center justify-center bg-mesh">
         <div className="text-center animate-fade-in">
-          <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse-slow">
-            <Leaf className="w-8 h-8 text-white" />
+          <div className="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-glow-primary animate-pulse-slow"
+               style={{ background: 'linear-gradient(135deg,#059669,#0891b2)' }}>
+            <Leaf className="w-10 h-10 text-white" />
           </div>
-          <p className="text-gray-500 font-medium">Loading dashboard...</p>
+          <p className="text-lg font-extrabold text-gray-900 mb-1">EcoWatch Admin</p>
+          <p className="text-gray-400 text-sm">Loading dashboard data…</p>
         </div>
       </div>
     )
@@ -333,93 +335,91 @@ export default function AdminDashboard() {
   ] : []
 
   return (
-    <div className="min-h-screen bg-surface">
-      {/* Header */}
-      <div className="bg-dark/70 backdrop-blur-xl shadow-lg sticky top-0 z-[1000] border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-11 h-11 bg-gradient-to-br from-primary-400 to-secondary-400 rounded-xl flex items-center justify-center shadow-glow-primary">
-              <Leaf className="w-6 h-6 text-white" />
+    <div className="min-h-screen bg-mesh">
+      {/* ── NAV ── */}
+      <nav className="nav-header">
+        <div className="max-w-7xl mx-auto px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-glow-primary"
+                 style={{ background: 'linear-gradient(135deg,#10b981,#0891b2)' }}>
+              <Leaf className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">Admin Dashboard</h1>
-              <p className="text-primary-300 text-sm">{profile?.full_name}</p>
+              <h1 className="text-base font-extrabold text-white tracking-tight leading-none">Admin Dashboard</h1>
+              <p className="text-primary-300 text-xs mt-0.5">{profile?.full_name}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={handleGenerateSchedule}
               disabled={generatingSchedule}
-              className="btn-accent py-2.5 text-sm flex items-center gap-2"
+              className="btn-accent py-2.5 text-sm"
             >
-              {generatingSchedule ? (
-                <Loader className="w-4 h-4 animate-spin" />
-              ) : (
-                <Calendar className="w-4 h-4" />
-              )}
-              {generatingSchedule ? 'Generating...' : 'Generate Schedule'}
+              {generatingSchedule ? <Loader className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+              {generatingSchedule ? 'Generating…' : 'Generate Schedule'}
             </button>
             <button
               onClick={handleRunPredictions}
               disabled={runningPrediction}
-              className="btn-secondary py-2.5 text-sm flex items-center gap-2"
+              className="btn-secondary py-2.5 text-sm"
             >
-              {runningPrediction ? (
-                <Loader className="w-4 h-4 animate-spin" />
-              ) : (
-                <Zap className="w-4 h-4" />
-              )}
-              {runningPrediction ? 'Running...' : 'Predictions'}
+              {runningPrediction ? <Loader className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {runningPrediction ? 'Running…' : 'Predictions'}
             </button>
-            <button onClick={signOut} className="btn-ghost text-white/70 hover:text-white hover:bg-white/10">
-              <LogOut className="w-4 h-4 inline mr-2" />
-              Sign Out
+            <button onClick={signOut}
+              className="flex items-center gap-2 text-white/70 hover:text-white hover:bg-white/10 px-4 py-2 rounded-xl transition-all duration-200 text-sm font-medium">
+              <LogOut className="w-4 h-4" /> Sign Out
             </button>
           </div>
         </div>
-      </div>
+      </nav>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Stats Grid */}
+      <div className="max-w-7xl mx-auto px-5 py-8">
+        {/* ── Stats Grid ── */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {statCards.map((card, index) => (
               <div
                 key={card.label}
                 className="stat-card animate-fade-in-up"
-                style={{ animationDelay: `${index * 100}ms` }}
+                style={{ animationDelay: `${index * 80}ms` }}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`w-12 h-12 bg-gradient-to-br ${card.gradient} rounded-xl flex items-center justify-center shadow-md`}>
+                <div className="flex items-start justify-between mb-5">
+                  <div className={`w-12 h-12 bg-gradient-to-br ${card.gradient} rounded-xl flex items-center justify-center`}
+                       style={{ boxShadow: '0 4px 14px -2px rgba(0,0,0,0.2)' }}>
                     <card.icon className="w-6 h-6 text-white" />
                   </div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{card.label}</p>
                 </div>
-                <p className="text-4xl font-extrabold text-gray-900">{card.value}</p>
+                <p className="text-4xl font-extrabold text-gray-900 mb-1">{card.value}</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
               </div>
             ))}
           </div>
         )}
 
-        {/* Map */}
+        {/* ── Map ── */}
         <div className="dash-card p-6 mb-8 animate-fade-in relative z-0">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                   style={{ background: 'linear-gradient(135deg,#059669,#0891b2)' }}>
                 <MapPin className="w-5 h-5 text-white" />
               </div>
-              <h2 className="text-lg font-bold text-gray-900">Campus Waste Map</h2>
+              <div>
+                <h2 className="text-lg font-extrabold text-gray-900">Campus Waste Map</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Live bin status · Click a marker for details</p>
+              </div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2 flex-wrap">
               {[
                 { color: 'bg-emerald-500', label: 'Low' },
                 { color: 'bg-amber-500', label: 'Medium' },
                 { color: 'bg-red-500', label: 'High' },
                 { color: 'bg-orange-500', label: 'Predicted' }
               ].map((item) => (
-                <div key={item.label} className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-full">
-                  <div className={`w-3 h-3 rounded-full ${item.color}`} />
-                  <span className="text-xs font-medium text-gray-600">{item.label}</span>
+                <div key={item.label} className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+                  <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
+                  <span className="text-xs font-semibold text-gray-600">{item.label}</span>
                 </div>
               ))}
             </div>
@@ -497,14 +497,18 @@ export default function AdminDashboard() {
         </div>
 
         {/* Analytics Charts */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          {/* Waste Trends */}
+        <div className="grid md:grid-cols-2 gap-5 mb-8">
+          {/* ── Waste Trends ── */}
           <div className="dash-card p-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-white" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                   style={{ background: 'linear-gradient(135deg,#0891b2,#3b82f6)' }}>
+                <TrendingUp className="w-5 h-5 text-white" />
               </div>
-              <h3 className="text-base font-bold text-gray-900">7-Day Waste Trends</h3>
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900">7-Day Waste Trends</h3>
+                <p className="text-xs text-gray-400">Reports & avg fill percentage</p>
+              </div>
             </div>
             {trends.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
@@ -532,13 +536,17 @@ export default function AdminDashboard() {
             )}
           </div>
 
-          {/* Department Waste Generation */}
+          {/* ── Department Waste Generation ── */}
           <div className="dash-card p-6 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl flex items-center justify-center">
-                <Activity className="w-4 h-4 text-white" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                   style={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}>
+                <Activity className="w-5 h-5 text-white" />
               </div>
-              <h3 className="text-base font-bold text-gray-900">Waste Generation by Department</h3>
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900">Waste by Department</h3>
+                <p className="text-xs text-gray-400">Reports, avg fill & severity</p>
+              </div>
             </div>
             {reports.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
@@ -701,13 +709,17 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Recent Reports */}
-        <div className="dash-card p-6 mb-8 animate-fade-in">
+        {/* ── Recent Reports ── */}
+        <div className="dash-card p-6 mb-6 animate-fade-in">
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-9 h-9 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
-              <AlertTriangle className="w-4 h-4 text-white" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                 style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}>
+              <AlertTriangle className="w-5 h-5 text-white" />
             </div>
-            <h3 className="text-base font-bold text-gray-900">Recent Reports</h3>
+            <div>
+              <h3 className="text-base font-extrabold text-gray-900">Recent Reports</h3>
+              <p className="text-xs text-gray-400">Latest 10 waste reports from campus</p>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full table-modern">
@@ -762,13 +774,17 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Active Tasks */}
+        {/* ── Active Tasks ── */}
         <div className="dash-card p-6 animate-fade-in">
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center">
-              <CheckCircle className="w-4 h-4 text-white" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                 style={{ background: 'linear-gradient(135deg,#059669,#0891b2)' }}>
+              <CheckCircle className="w-5 h-5 text-white" />
             </div>
-            <h3 className="text-base font-bold text-gray-900">Active Cleaning Tasks</h3>
+            <div>
+              <h3 className="text-base font-extrabold text-gray-900">Active Cleaning Tasks</h3>
+              <p className="text-xs text-gray-400">Tasks currently in progress or pending</p>
+            </div>
           </div>
           <div className="space-y-3">
             {tasks
@@ -808,11 +824,12 @@ export default function AdminDashboard() {
                 )
               })}
             {tasks.filter((t) => t.status !== 'completed').length === 0 && (
-              <div className="text-center py-12 animate-fade-in">
-                <div className="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <CheckCircle className="w-8 h-8 text-primary-400" />
+              <div className="empty-state">
+                <div className="empty-state-icon">
+                  <CheckCircle className="w-10 h-10 text-primary-400" />
                 </div>
-                <p className="text-gray-400 text-sm font-medium">No active tasks</p>
+                <p className="text-gray-700 font-semibold">All tasks completed!</p>
+                <p className="text-gray-400 text-sm mt-1">No active cleaning tasks right now.</p>
               </div>
             )}
           </div>
