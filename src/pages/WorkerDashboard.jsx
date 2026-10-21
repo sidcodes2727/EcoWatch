@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
+import LanguageToggle from '../components/LanguageToggle'
 import { supabase } from '../lib/supabase'
 import { verifyCleaningImage } from '../lib/aiService'
 import { optimizeRoute, formatDistance, formatTime, getTotalEstimatedTime } from '../lib/routeOptimizer'
 import {
   Camera, MapPin, CheckCircle, Navigation,
-  Loader, Upload, Leaf, AlertCircle, Clock
+  Loader, Upload, Leaf, AlertCircle, Clock, Mic, Volume2
 } from 'lucide-react'
 
 export default function WorkerDashboard() {
   const { profile, signOut } = useAuth()
+  const { language, t } = useLanguage()
   const [tasks, setTasks] = useState([])
   const [optimizedRoute, setOptimizedRoute] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
@@ -24,6 +27,144 @@ export default function WorkerDashboard() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [sortBy, setSortBy] = useState('optimized')
+
+  // Part B1: Hands-Free Push-to-Talk Voice Assistant State
+  const [isListening, setIsListening] = useState(false)
+  const [voiceTranscript, setVoiceTranscript] = useState('')
+  const [voiceResponse, setVoiceResponse] = useState('')
+  const recognitionRef = useRef(null)
+
+  const speak = (text, lang = (language === 'hi' ? 'hi-IN' : 'en-IN')) => {
+    if (!('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = lang
+    utterance.rate = 0.95
+    utterance.pitch = 1.0
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const startVoiceCommand = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      setError('Voice recognition is not supported in this browser. Please use Chrome or Edge.')
+      return
+    }
+
+    try {
+      const recognition = new SpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
+
+      recognition.onstart = () => {
+        setIsListening(true)
+        setVoiceTranscript('Listening...')
+      }
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript.toLowerCase()
+        setVoiceTranscript(transcript)
+        handleVoiceAction(transcript)
+      }
+
+      recognition.onerror = (e) => {
+        console.error('Speech recognition error:', e)
+        setIsListening(false)
+        setVoiceTranscript('Voice input stopped')
+      }
+
+      recognition.onend = () => {
+        setIsListening(false)
+      }
+
+      recognitionRef.current = recognition
+      recognition.start()
+    } catch (err) {
+      console.error(err)
+      setIsListening(false)
+    }
+  }
+
+  const stopVoiceCommand = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+    }
+    setIsListening(false)
+  }
+
+  const handleVoiceAction = (cmd) => {
+    const activeTasks = displayedTasks.filter(t => t.status !== 'completed')
+    const isHindi = language === 'hi' || /[\u0900-\u097F]/.test(cmd) || cmd.includes('agla') || cmd.includes('safai') || cmd.includes('shuru') || cmd.includes('khatam')
+
+    // 1. Next Stop commands
+    const isNextStop = cmd.includes('next') || cmd.includes('route') || cmd.includes('stop') || cmd.includes('where') ||
+                       cmd.includes('अगला') || cmd.includes('स्टॉप') || cmd.includes('रास्ता') || cmd.includes('कहाँ') || cmd.includes('आगे') || cmd.includes('kahan') || cmd.includes('agla')
+
+    // 2. Start Task commands
+    const isStart = cmd.includes('start') || cmd.includes('begin') || cmd.includes('commence') ||
+                    cmd.includes('शुरू') || cmd.includes('काम') || cmd.includes('सफाई शुरू') || cmd.includes('प्रारंभ') || cmd.includes('shuru')
+
+    // 3. Verify / Finish commands
+    const isDone = cmd.includes('clean') || cmd.includes('photo') || cmd.includes('verify') || cmd.includes('done') || cmd.includes('finish') ||
+                   cmd.includes('सफाई हो गई') || cmd.includes('साफ') || cmd.includes('हो गया') || cmd.includes('फोटो') || cmd.includes('चेक') || cmd.includes('सत्यापित') || cmd.includes('khatam') || cmd.includes('safai')
+
+    // 4. Status / Count commands
+    const isCount = cmd.includes('how many') || cmd.includes('status') || cmd.includes('count') ||
+                    cmd.includes('कितने') || cmd.includes('बाकी') || cmd.includes('काम बताओ') || cmd.includes('kitne') || cmd.includes('baaki')
+
+    if (isNextStop) {
+      if (!activeTasks.length) {
+        const msg = isHindi ? 'सभी कार्य पूरे हो चुके हैं। कोई लंबित स्टॉप नहीं है।' : 'All tasks completed. No pending stops.'
+        speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+        setVoiceResponse(msg)
+        return
+      }
+      const next = activeTasks[0]
+      const bin = next.displayBin || next.bins
+      const fill = Math.round(bin?.current_fill_percentage || 0)
+      const msg = isHindi
+        ? `अगला स्टॉप ${bin?.bin_code || 'डस्टबिन'}, ${bin?.location_name || 'परिसर'} पर है। यह अभी ${fill} प्रतिशत भरा हुआ है।`
+        : `Next stop is ${bin?.bin_code || 'bin'} at ${bin?.location_name || 'campus'}. Current fill is ${fill} percent.`
+      speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+      setVoiceResponse(msg)
+    } else if (isStart) {
+      const assigned = activeTasks.find(t => t.status === 'assigned')
+      if (assigned) {
+        handleStartTask(assigned.id)
+        const msg = isHindi ? 'कार्य शुरू कर दिया गया है। कृपया सफाई के बाद फोटो खींचें।' : 'Starting task. Good luck with the cleaning.'
+        speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+        setVoiceResponse((isHindi ? 'कार्य प्रारंभ: ' : 'Commencing task: ') + (assigned.bins?.bin_code || ''))
+      } else {
+        const msg = isHindi ? 'शुरू करने के लिए कोई नया कार्य अभी नहीं है।' : 'No task is currently in assigned status to start.'
+        speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+        setVoiceResponse(msg)
+      }
+    } else if (isDone) {
+      const inProgress = activeTasks.find(t => t.status === 'in_progress')
+      if (inProgress) {
+        handleStartCompletion(inProgress)
+        const msg = isHindi ? 'सत्यापन कैमरा खोला जा रहा है। कृपया साफ किया हुआ डस्टबिन दिखाएं।' : 'Opening verification camera. Please show the empty bin clearly.'
+        speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+        setVoiceResponse(msg)
+      } else {
+        const msg = isHindi ? 'सत्यापन से पहले कृपया कार्य शुरू करें।' : 'Please start the task before submitting completion.'
+        speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+        setVoiceResponse(msg)
+      }
+    } else if (isCount) {
+      const count = activeTasks.length
+      const msg = isHindi ? `आपके पास कुल ${count} कार्य बाकी हैं।` : `You have ${count} pending cleaning tasks remaining.`
+      speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+      setVoiceResponse(msg)
+    } else {
+      const msg = isHindi
+        ? `आदेश समझा: "${cmd}". आप कह सकते हैं: 'अगला स्टॉप', 'काम शुरू करें', या 'सफाई हो गई'`
+        : `Command recognized: "${cmd}". You can say: 'Next stop', 'Start task', or 'Verify cleaning'`
+      speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+      setVoiceResponse(msg)
+    }
+  }
 
   const displayedTasks = useMemo(() => {
     let list = []
@@ -210,8 +351,8 @@ export default function WorkerDashboard() {
   }
 
   const getPriorityBadge = (p) => {
-    if (p === 1) return 'badge-editorial badge-red'
-    if (p === 2) return 'badge-editorial badge-yellow'
+    if (p === 1) return 'badge-editorial badge-red font-bold'
+    if (p === 2) return 'badge-editorial badge-yellow font-bold'
     return 'badge-editorial badge-eco'
   }
 
@@ -222,14 +363,17 @@ export default function WorkerDashboard() {
           <div className="flex items-center gap-3">
             <Leaf className="w-5 h-5 text-eco-900" strokeWidth={1.5} />
             <div className="flex items-center gap-4">
-              <h1 className="font-serif text-lg tracking-[0.2em] text-eco-900 uppercase">Field Operations</h1>
+              <h1 className="font-serif text-lg tracking-[0.2em] text-eco-900 uppercase">{t('worker')}</h1>
               <span className="text-eco-300">|</span>
               <p className="text-[10px] font-bold tracking-[0.2em] text-eco-600 uppercase">{profile?.full_name}</p>
             </div>
           </div>
-          <button onClick={signOut} className="btn-editorial-ghost">
-            Sign out
-          </button>
+          <div className="flex items-center gap-4">
+            <LanguageToggle />
+            <button onClick={signOut} className="btn-editorial-ghost">
+              {t('signOut')}
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -272,6 +416,44 @@ export default function WorkerDashboard() {
           </div>
         )}
 
+        {/* Part B1: Hands-Free Voice Assistant Controller */}
+        <div className="card-editorial mb-12 border-eco-900/10 bg-white">
+          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
+              }`}>
+                <Mic className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
+                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
+                </div>
+                <p className="text-xs text-eco-600 font-light mt-0.5">
+                  {voiceResponse || voiceTranscript || (language === 'hi' ? "बोलने के लिए दबाएं: 'अगला स्टॉप', 'काम शुरू करें', 'सफाई हो गई'" : "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'")}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onMouseDown={startVoiceCommand}
+              onMouseUp={stopVoiceCommand}
+              onTouchStart={startVoiceCommand}
+              onTouchEnd={stopVoiceCommand}
+              className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
+                isListening
+                  ? 'bg-red-600 text-white ring-4 ring-red-300'
+                  : 'bg-eco-900 hover:bg-eco-800 text-white'
+              }`}
+            >
+              <Mic className="w-4 h-4 mr-2 inline" />
+              {isListening ? (language === 'hi' ? 'प्रोसेस करने के लिए छोड़ें' : 'RELEASE TO PROCESS') : (language === 'hi' ? 'बोलने के लिए दबाएं' : 'HOLD TO SPEAK')}
+            </button>
+          </div>
+        </div>
+
         {showCompletionOptions && (
           <div className="modal-overlay-editorial">
             <div className="card-editorial w-full max-w-md bg-white">
@@ -292,6 +474,44 @@ export default function WorkerDashboard() {
             </div>
           </div>
         )}
+
+        {/* Part B1: Hands-Free Voice Assistant Controller */}
+        <div className="card-editorial mb-12 border-eco-900/10 bg-white">
+          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
+              }`}>
+                <Mic className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
+                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
+                </div>
+                <p className="text-xs text-eco-600 font-light mt-0.5">
+                  {voiceResponse || voiceTranscript || "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onMouseDown={startVoiceCommand}
+              onMouseUp={stopVoiceCommand}
+              onTouchStart={startVoiceCommand}
+              onTouchEnd={stopVoiceCommand}
+              className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
+                isListening
+                  ? 'bg-red-600 text-white ring-4 ring-red-300'
+                  : 'bg-eco-900 hover:bg-eco-800 text-white'
+              }`}
+            >
+              <Mic className="w-4 h-4 mr-2 inline" />
+              {isListening ? 'RELEASE TO PROCESS' : 'HOLD TO SPEAK'}
+            </button>
+          </div>
+        </div>
 
         {capturing && (
           <div className="modal-overlay-editorial">
@@ -315,6 +535,44 @@ export default function WorkerDashboard() {
             </div>
           </div>
         )}
+
+        {/* Part B1: Hands-Free Voice Assistant Controller */}
+        <div className="card-editorial mb-12 border-eco-900/10 bg-white">
+          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
+              }`}>
+                <Mic className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
+                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
+                </div>
+                <p className="text-xs text-eco-600 font-light mt-0.5">
+                  {voiceResponse || voiceTranscript || "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onMouseDown={startVoiceCommand}
+              onMouseUp={stopVoiceCommand}
+              onTouchStart={startVoiceCommand}
+              onTouchEnd={stopVoiceCommand}
+              className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
+                isListening
+                  ? 'bg-red-600 text-white ring-4 ring-red-300'
+                  : 'bg-eco-900 hover:bg-eco-800 text-white'
+              }`}
+            >
+              <Mic className="w-4 h-4 mr-2 inline" />
+              {isListening ? 'RELEASE TO PROCESS' : 'HOLD TO SPEAK'}
+            </button>
+          </div>
+        </div>
 
         {capturedImage && !capturing && (
           <div className="modal-overlay-editorial">
@@ -346,6 +604,44 @@ export default function WorkerDashboard() {
             </div>
           </div>
         )}
+
+        {/* Part B1: Hands-Free Voice Assistant Controller */}
+        <div className="card-editorial mb-12 border-eco-900/10 bg-white">
+          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
+              }`}>
+                <Mic className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
+                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
+                </div>
+                <p className="text-xs text-eco-600 font-light mt-0.5">
+                  {voiceResponse || voiceTranscript || "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onMouseDown={startVoiceCommand}
+              onMouseUp={stopVoiceCommand}
+              onTouchStart={startVoiceCommand}
+              onTouchEnd={stopVoiceCommand}
+              className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
+                isListening
+                  ? 'bg-red-600 text-white ring-4 ring-red-300'
+                  : 'bg-eco-900 hover:bg-eco-800 text-white'
+              }`}
+            >
+              <Mic className="w-4 h-4 mr-2 inline" />
+              {isListening ? 'RELEASE TO PROCESS' : 'HOLD TO SPEAK'}
+            </button>
+          </div>
+        </div>
 
         <div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
@@ -494,6 +790,44 @@ export default function WorkerDashboard() {
             </div>
           </div>
         )}
+
+        {/* Part B1: Hands-Free Voice Assistant Controller */}
+        <div className="card-editorial mb-12 border-eco-900/10 bg-white">
+          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
+              }`}>
+                <Mic className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
+                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
+                </div>
+                <p className="text-xs text-eco-600 font-light mt-0.5">
+                  {voiceResponse || voiceTranscript || "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onMouseDown={startVoiceCommand}
+              onMouseUp={stopVoiceCommand}
+              onTouchStart={startVoiceCommand}
+              onTouchEnd={stopVoiceCommand}
+              className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
+                isListening
+                  ? 'bg-red-600 text-white ring-4 ring-red-300'
+                  : 'bg-eco-900 hover:bg-eco-800 text-white'
+              }`}
+            >
+              <Mic className="w-4 h-4 mr-2 inline" />
+              {isListening ? 'RELEASE TO PROCESS' : 'HOLD TO SPEAK'}
+            </button>
+          </div>
+        </div>
 
       </div>
     </div>

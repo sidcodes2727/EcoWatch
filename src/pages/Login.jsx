@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
+import LanguageToggle from '../components/LanguageToggle'
 import { Leaf, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 export default function Login() {
@@ -28,6 +30,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-grid-pattern bg-grid-size relative">
+      <div className="absolute top-8 right-8 z-50"><LanguageToggle /></div>
       <Link to="/" className="absolute top-8 left-8 flex items-center gap-2">
         <Leaf className="w-5 h-5 text-eco-900" strokeWidth={1.5} />
         <span className="font-serif text-lg tracking-[0.2em] text-eco-900 uppercase">EcoWatch</span>

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
+import LanguageToggle from '../components/LanguageToggle'
 import { supabase } from '../lib/supabase'
 import { analyzeWasteImage } from '../lib/aiService'
 import { findNearestBin } from '../lib/routeOptimizer'
@@ -10,6 +12,7 @@ import {
 
 export default function UserDashboard() {
   const { profile, signOut } = useAuth()
+  const { language, t } = useLanguage()
   const [location, setLocation] = useState(null)
   const [nearestBin, setNearestBin] = useState(null)
   const [capturing, setCapturing] = useState(false)
@@ -22,6 +25,10 @@ export default function UserDashboard() {
   const [showOptions, setShowOptions] = useState(false)
   const [severityFilter, setSeverityFilter] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
+  const [reportType, setReportType] = useState('standard') // 'standard' | 'overflow_around' | 'request_bin'
+  const [showBinRequestModal, setShowBinRequestModal] = useState(false)
+  const [binRequestNotes, setBinRequestNotes] = useState('')
+  const [submittingRequest, setSubmittingRequest] = useState(false)
 
   const displayedReports = useMemo(() => {
     let list = [...myReports]
@@ -45,6 +52,35 @@ export default function UserDashboard() {
   const fileInputRef = useRef(null)
 
   useEffect(() => { fetchMyReports() }, [])
+
+  const handleBinRequestSubmit = async () => {
+    setSubmittingRequest(true)
+    setError('')
+    try {
+      const loc = location || await getUserLocation()
+      const { error: reqError } = await supabase.from('waste_reports').insert({
+        bin_id: nearestBin?.id || null,
+        reporter_id: profile.id,
+        image_url: 'https://tvtbgtdntxkhdxjtltmc.supabase.co/storage/v1/object/public/waste-images/request-bin-pin.png',
+        fill_percentage: 100,
+        severity: 'high',
+        waste_type: 'New Bin Demand Signal',
+        ai_confidence: 90,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        notes: '[REQUEST_BIN_HERE] ' + (binRequestNotes || 'Citizen requested a bin at this location due to lack of disposal options.')
+      })
+      if (reqError) throw reqError
+      setShowBinRequestModal(false)
+      setBinRequestNotes('')
+      setSuccess('Demand signal recorded! Facility administrators have received your pin request.')
+      fetchMyReports()
+    } catch (err) {
+      setError('Failed to record pin request: ' + err.message)
+    } finally {
+      setSubmittingRequest(false)
+    }
+  }
 
   const fetchMyReports = async () => {
     try {
@@ -199,9 +235,12 @@ export default function UserDashboard() {
               <p className="text-[10px] font-bold tracking-[0.2em] text-eco-600 uppercase">{profile?.full_name}</p>
             </div>
           </div>
-          <button onClick={signOut} className="btn-editorial-ghost">
-            Sign out
-          </button>
+          <div className="flex items-center gap-4">
+            <LanguageToggle />
+            <button onClick={signOut} className="btn-editorial-ghost">
+              {t('signOut')}
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -244,15 +283,60 @@ export default function UserDashboard() {
 
         {!capturing && !capturedImage && !showOptions && (
           <div className="card-editorial mb-12">
-            <div className="card-body-editorial flex flex-col items-center text-center py-20 px-8">
-              <Leaf className="w-10 h-10 text-eco-300 mb-8" strokeWidth={1} />
-              <h2 className="font-serif text-5xl text-eco-900 mb-6 tracking-tight">Report an Incident</h2>
-              <p className="text-eco-600 font-light max-w-md text-base leading-relaxed mb-10">
-                Submit photographic evidence. Our AI analysis will determine fill levels and deploy appropriate personnel.
+            <div className="card-body-editorial flex flex-col items-center text-center py-16 px-8">
+              <Leaf className="w-10 h-10 text-eco-300 mb-6" strokeWidth={1} />
+              <h2 className="font-serif text-5xl text-eco-900 mb-4 tracking-tight">{t('campusWasteActions')}</h2>
+              <p className="text-eco-600 font-light max-w-md text-base leading-relaxed mb-8">
+                Help maintain VJTI campus cleanliness with instant AI verification and spatial hotspot reporting.
               </p>
-              <button onClick={() => { setError(''); setSuccess(''); setShowOptions(true) }} className="btn-editorial btn-editorial-primary">
-                Initialize Report
-              </button>
+              
+              <div className="grid sm:grid-cols-3 gap-4 w-full max-w-2xl">
+                <button
+                  onClick={() => {
+                    setError('')
+                    setSuccess('')
+                    setReportType('standard')
+                    setShowOptions(true)
+                  }}
+                  className="btn-editorial btn-editorial-primary flex flex-col items-center justify-center py-6 px-4 gap-2"
+                >
+                  <Camera className="w-5 h-5 text-eco-300" />
+                  <span className="text-xs font-bold tracking-wider">{t('reportBinFill')}</span>
+                  <span className="text-[10px] text-eco-300/80 font-normal">AI vision inspection</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setError('')
+                    setSuccess('')
+                    setReportType('overflow_around')
+                    setShowOptions(true)
+                  }}
+                  className="btn-editorial bg-amber-600 hover:bg-amber-700 text-white flex flex-col items-center justify-center py-6 px-4 gap-2 border-transparent"
+                >
+                  <AlertCircle className="w-5 h-5 text-amber-200" />
+                  <span className="text-xs font-bold tracking-wider">{t('overflowOutside')}</span>
+                  <span className="text-[10px] text-amber-200/80 font-normal">Spillover alert</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    setError('')
+                    setSuccess('')
+                    try {
+                      await setupLocationAndBin()
+                      setShowBinRequestModal(true)
+                    } catch (err) {
+                      setError(err.message)
+                    }
+                  }}
+                  className="btn-editorial bg-indigo-700 hover:bg-indigo-800 text-white flex flex-col items-center justify-center py-6 px-4 gap-2 border-transparent"
+                >
+                  <MapPin className="w-5 h-5 text-indigo-300" />
+                  <span className="text-xs font-bold tracking-wider">{t('requestBinHere')}</span>
+                  <span className="text-[10px] text-indigo-200/80 font-normal">Drop spatial pin</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -360,6 +444,59 @@ export default function UserDashboard() {
                       </button>
                     </div>
                   ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Request Bin Here Modal */}
+        {showBinRequestModal && (
+          <div className="modal-overlay-editorial">
+            <div className="card-editorial w-full max-w-md bg-white">
+              <div className="card-header-editorial bg-indigo-900 text-white border-none flex justify-between items-center">
+                <h3 className="font-serif text-xl flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-indigo-300" /> Request a Bin Here
+                </h3>
+                <span className="text-[10px] font-mono uppercase bg-white/20 px-2 py-0.5 rounded">GPS PIN</span>
+              </div>
+              <div className="card-body-editorial space-y-6 p-6">
+                <p className="text-xs text-eco-700 leading-relaxed">
+                  Notice an area in VJTI where waste accumulates because there is no bin nearby? Submit this pin to alert campus planning.
+                </p>
+
+                {location && (
+                  <div className="p-3 bg-eco-50 border border-eco-900/10 font-mono text-xs text-eco-900 flex justify-between">
+                    <span>Target GPS:</span>
+                    <span>{location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="label-editorial">Specific Location / Why is a bin needed here?</label>
+                  <textarea
+                    rows={3}
+                    value={binRequestNotes}
+                    onChange={(e) => setBinRequestNotes(e.target.value)}
+                    className="input-editorial border border-eco-900/20 p-2 text-xs"
+                    placeholder="e.g. Near the quad benches, students leave juice boxes between 1-2 PM..."
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleBinRequestSubmit}
+                    disabled={submittingRequest}
+                    className="btn-editorial bg-indigo-700 hover:bg-indigo-800 text-white flex-1 py-3 text-xs"
+                  >
+                    {submittingRequest ? 'Registering Pin...' : 'Drop Pin Request'}
+                  </button>
+                  <button
+                    onClick={() => setShowBinRequestModal(false)}
+                    className="btn-editorial btn-editorial-ghost py-3 text-xs"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
             </div>

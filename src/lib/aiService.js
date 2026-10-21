@@ -13,7 +13,7 @@ export async function analyzeWasteImage(imageFile) {
 
     // Try the latest Gemini Flash model first (faster and more reliable)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash'
+      model: 'gemini-3.5-flash-lite'
     })
 
     // Convert image to base64
@@ -93,12 +93,12 @@ IMPORTANT: If the bin looks FULL, give it 80-100% fill percentage. Be HONEST abo
   } catch (error) {
     console.error('❌ AI Error:', error.message)
 
-    // Try fallback to older model
+    // Try fallback to Gemini 3.8 Flash
     try {
-      console.log('🔄 Trying fallback model: gemini-1.5-flash...')
+      console.log('🔄 Trying fallback model: gemini-3.8-flash...')
 
       const fallbackModel = genAI.getGenerativeModel({
-        model: 'gemini-3.5-flash-lite'
+        model: 'gemini-3.8-flash'
       })
 
       const base64Image = await fileToBase64(imageFile)
@@ -241,7 +241,7 @@ export async function compareImages(originalImageUrl, completionImageFile) {
     console.log('🔄 Comparing images with AI...')
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash'
+      model: 'gemini-3.5-flash-lite'
     })
 
     // Fetch the original image
@@ -406,5 +406,71 @@ export async function generateCleaningSchedule(historicalData) {
   } catch (error) {
     console.error('❌ Schedule generation failed:', error)
     throw error
+  }
+}
+
+/**
+ * Extracts and verifies student profile data from a VJTI Student ID card using Gemini Vision
+ * @param {File} idImageFile - Captured or uploaded ID card photo
+ * @returns {Promise<Object>} Extracted credentials and authenticity score
+ */
+export async function extractStudentIdData(idImageFile) {
+  try {
+    console.log('🪪 Extracting VJTI ID card data with Gemini...')
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' })
+    const base64Image = await fileToBase64(idImageFile)
+
+    const prompt = `You are an automated identity verification inspector for Veermata Jijabai Technological Institute (VJTI).
+Examine this student ID card with strict forensic accuracy.
+
+EXTRACT AND VERIFY:
+1. isVjtiCard: boolean (Check for 'Veermata Jijabai Technological Institute', 'ESTD 1887', or vertical bold red 'VJTI' banner).
+2. idNumber: string (e.g. 9-digit ID like 241080023).
+3. fullName: string (The student full name as printed).
+4. degree: string (e.g. B. Tech, M. Tech, Diploma, MCA).
+5. department: string (e.g. Information Technology, Computer Engineering).
+6. dob: string (DD/MM/YYYY).
+7. validityYear: number (e.g. 2028).
+8. confidence: number (0-100).
+9. securityMarkersFound: array of strings from detected landmarks (e.g., ["VERTICAL_RED_VJTI_TEXT", "ESTD_1887_LOGO", "GOVERNMENT_AUTONOMUS_BANNER", "DIRECTOR_SIGNATURE"]).
+10. observations: brief explanation of forensic inspection.
+
+Respond ONLY with this valid JSON object:
+{
+  "isVjtiCard": true,
+  "idNumber": "string",
+  "fullName": "string",
+  "degree": "string",
+  "department": "string",
+  "dob": "string",
+  "validityYear": 2028,
+  "confidence": 95,
+  "securityMarkersFound": ["VERTICAL_RED_VJTI_TEXT", "ESTD_1887_LOGO"],
+  "observations": "string"
+}`
+
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Image,
+          mimeType: idImageFile.type || 'image/jpeg'
+        }
+      }
+    ])
+
+    const response = await result.response
+    const text = response.text()
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      throw new Error('Could not parse verification data from ID card')
+    }
+
+    const data = JSON.parse(jsonMatch[0])
+    console.log('✅ ID card extracted:', data)
+    return data
+  } catch (err) {
+    console.error('❌ ID card extraction error:', err)
+    throw err
   }
 }
