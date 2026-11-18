@@ -7,7 +7,7 @@ import { analyzeWasteImage } from '../lib/aiService'
 import { findNearestBin } from '../lib/routeOptimizer'
 import {
   Camera, Loader, CheckCircle, Upload,
-  MapPin, Leaf, LogOut, Clock, Sparkles, AlertCircle
+  MapPin, Leaf, Sparkles, AlertCircle
 } from 'lucide-react'
 
 export default function UserDashboard() {
@@ -25,7 +25,7 @@ export default function UserDashboard() {
   const [showOptions, setShowOptions] = useState(false)
   const [severityFilter, setSeverityFilter] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
-  const [reportType, setReportType] = useState('standard') // 'standard' | 'overflow_around' | 'request_bin'
+  const [reportType, setReportType] = useState('standard')
   const [showBinRequestModal, setShowBinRequestModal] = useState(false)
   const [binRequestNotes, setBinRequestNotes] = useState('')
   const [submittingRequest, setSubmittingRequest] = useState(false)
@@ -68,15 +68,15 @@ export default function UserDashboard() {
         ai_confidence: 90,
         latitude: loc.latitude,
         longitude: loc.longitude,
-        notes: '[REQUEST_BIN_HERE] ' + (binRequestNotes || 'Citizen requested a bin at this location due to lack of disposal options.')
+        notes: '[REQUEST_BIN_HERE] ' + (binRequestNotes || (language === 'hi' ? 'नागरिक द्वारा इस स्थान पर डस्टबिन की मांग।' : 'Citizen requested a bin at this location due to lack of disposal options.'))
       })
       if (reqError) throw reqError
       setShowBinRequestModal(false)
       setBinRequestNotes('')
-      setSuccess('Demand signal recorded! Facility administrators have received your pin request.')
+      setSuccess(language === 'hi' ? 'स्थान पिन दर्ज हो गया! सुविधा प्रबंधकों को आपका अनुरोध भेज दिया गया है।' : 'Demand signal recorded! Facility administrators have received your pin request.')
       fetchMyReports()
     } catch (err) {
-      setError('Failed to record pin request: ' + err.message)
+      setError((language === 'hi' ? 'पिन दर्ज करने में त्रुटि: ' : 'Failed to record pin request: ') + err.message)
     } finally {
       setSubmittingRequest(false)
     }
@@ -109,15 +109,15 @@ export default function UserDashboard() {
   })
 
   const setupLocationAndBin = async () => {
-    setError('Getting location...')
+    setError(language === 'hi' ? 'स्थान खोजा जा रहा है...' : 'Getting location...')
     const userLocation = await getUserLocation()
     setLocation(userLocation)
-    if (userLocation.isFallback) setError('Using campus center (GPS off)')
+    if (userLocation.isFallback) setError(language === 'hi' ? 'परिसर केंद्र उपयोग हो रहा है (GPS बंद है)' : 'Using campus center (GPS off)')
     else setError('')
 
     const { data: bins, error: binsError } = await supabase.from('bins').select('*').eq('is_active', true)
     if (binsError) throw binsError
-    if (!bins?.length) throw new Error('No bins available')
+    if (!bins?.length) throw new Error(language === 'hi' ? 'कोई डस्टबिन उपलब्ध नहीं है' : 'No bins available')
 
     const nearest = findNearestBin(userLocation, bins)
     setNearestBin(nearest)
@@ -132,7 +132,7 @@ export default function UserDashboard() {
       setCapturing(true)
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       if (videoRef.current) { videoRef.current.srcObject = stream; streamRef.current = stream }
-    } catch (err) { setError('Camera failed: ' + err.message) }
+    } catch (err) { setError((language === 'hi' ? 'कैमरा विफल: ' : 'Camera failed: ') + err.message) }
   }
 
   const handleFileUpload = async () => {
@@ -140,14 +140,14 @@ export default function UserDashboard() {
     try {
       await setupLocationAndBin()
       fileInputRef.current?.click()
-    } catch (err) { setError('Location failed: ' + err.message) }
+    } catch (err) { setError((language === 'hi' ? 'स्थान पहचान विफल: ' : 'Location failed: ') + err.message) }
   }
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) return setError('Please select an image')
-    if (file.size > 5 * 1024 * 1024) return setError('Image too large (max 5MB)')
+    if (!file.type.startsWith('image/')) return setError(language === 'hi' ? 'कृपया फोटो फ़ाइल चुनें' : 'Please select an image')
+    if (file.size > 5 * 1024 * 1024) return setError(language === 'hi' ? 'फोटो बहुत बड़ी है (अधिकतम 5MB)' : 'Image too large (max 5MB)')
     setCapturedImage(URL.createObjectURL(file))
     await analyzeImage(file)
   }
@@ -173,7 +173,10 @@ export default function UserDashboard() {
       const result = await analyzeWasteImage(imageFile)
       setAnalysis(result)
       if (result.fillPercentage < 30) {
-        setSuccess(`Bin is mostly empty (${result.fillPercentage.toFixed(0)}%). No report needed!`); return
+        setSuccess(language === 'hi'
+          ? `डस्टबिन अधिकांशतः खाली है (${result.fillPercentage.toFixed(0)}%)। रिपोर्ट की आवश्यकता नहीं है!`
+          : `Bin is mostly empty (${result.fillPercentage.toFixed(0)}%). No report needed!`)
+        return
       }
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`
       const { error: uploadError } = await supabase.storage.from('waste-images').upload(fileName, imageFile)
@@ -199,10 +202,10 @@ export default function UserDashboard() {
         bin_id: nearestBin.id, report_id: report.id, priority, status: 'pending',
         notes: `${result.wasteType} - ${result.fillPercentage}% full (${result.severity} severity)`
       })
-      setSuccess('Report submitted successfully!')
+      setSuccess(language === 'hi' ? 'रिपोर्ट सफलतापूर्वक दर्ज हो गई!' : 'Report submitted successfully!')
       fetchMyReports()
     } catch (err) {
-      setError('Analysis failed: ' + err.message)
+      setError((language === 'hi' ? 'विश्लेषण विफल: ' : 'Analysis failed: ') + err.message)
     } finally {
       setAnalyzing(false)
     }
@@ -220,7 +223,8 @@ export default function UserDashboard() {
 
   const getSeverityBadge = (s) => {
     const map = { high: 'badge-red', medium: 'badge-yellow', low: 'badge-eco' }
-    return `badge-editorial ${map[s] || 'badge-slate'}`
+    const label = s === 'high' ? t('severityHigh') : s === 'medium' ? t('severityMedium') : t('severityLow')
+    return { className: `badge-editorial ${map[s] || 'badge-slate'}`, label }
   }
 
   return (
@@ -264,17 +268,17 @@ export default function UserDashboard() {
           <div className="modal-overlay-editorial">
             <div className="card-editorial w-full max-w-md bg-white">
               <div className="card-header-editorial">
-                <h3 className="font-serif text-2xl text-eco-900">Select Source</h3>
+                <h3 className="font-serif text-2xl text-eco-900">{t('selectSource')}</h3>
               </div>
               <div className="card-body-editorial space-y-4">
                 <button onClick={handleCameraCapture} className="btn-editorial btn-editorial-primary w-full">
-                  <Camera className="w-4 h-4 mr-3" /> Camera
+                  <Camera className="w-4 h-4 mr-3" /> {t('camera')}
                 </button>
                 <button onClick={handleFileUpload} className="btn-editorial btn-editorial-secondary w-full">
-                  <Upload className="w-4 h-4 mr-3" /> Upload File
+                  <Upload className="w-4 h-4 mr-3" /> {t('uploadFile')}
                 </button>
                 <button onClick={() => setShowOptions(false)} className="btn-editorial btn-editorial-ghost w-full mt-4">
-                  Cancel
+                  {t('cancel')}
                 </button>
               </div>
             </div>
@@ -287,7 +291,7 @@ export default function UserDashboard() {
               <Leaf className="w-10 h-10 text-eco-300 mb-6" strokeWidth={1} />
               <h2 className="font-serif text-5xl text-eco-900 mb-4 tracking-tight">{t('campusWasteActions')}</h2>
               <p className="text-eco-600 font-light max-w-md text-base leading-relaxed mb-8">
-                Help maintain VJTI campus cleanliness with instant AI verification and spatial hotspot reporting.
+                {t('userTagline')}
               </p>
               
               <div className="grid sm:grid-cols-3 gap-4 w-full max-w-2xl">
@@ -302,7 +306,7 @@ export default function UserDashboard() {
                 >
                   <Camera className="w-5 h-5 text-eco-300" />
                   <span className="text-xs font-bold tracking-wider">{t('reportBinFill')}</span>
-                  <span className="text-[10px] text-eco-300/80 font-normal">AI vision inspection</span>
+                  <span className="text-[10px] text-eco-300/80 font-normal">{t('aiVisionInspection')}</span>
                 </button>
 
                 <button
@@ -316,7 +320,7 @@ export default function UserDashboard() {
                 >
                   <AlertCircle className="w-5 h-5 text-amber-200" />
                   <span className="text-xs font-bold tracking-wider">{t('overflowOutside')}</span>
-                  <span className="text-[10px] text-amber-200/80 font-normal">Spillover alert</span>
+                  <span className="text-[10px] text-amber-200/80 font-normal">{t('spilloverAlert')}</span>
                 </button>
 
                 <button
@@ -334,7 +338,7 @@ export default function UserDashboard() {
                 >
                   <MapPin className="w-5 h-5 text-indigo-300" />
                   <span className="text-xs font-bold tracking-wider">{t('requestBinHere')}</span>
-                  <span className="text-[10px] text-indigo-200/80 font-normal">Drop spatial pin</span>
+                  <span className="text-[10px] text-indigo-200/80 font-normal">{t('dropSpatialPin')}</span>
                 </button>
               </div>
             </div>
@@ -344,19 +348,19 @@ export default function UserDashboard() {
         {capturing && (
           <div className="card-editorial mb-12">
             <div className="card-header-editorial">
-              <h3 className="font-serif text-3xl text-eco-900">Capture Proof</h3>
+              <h3 className="font-serif text-3xl text-eco-900">{t('captureProof')}</h3>
             </div>
             <div className="card-body-editorial p-6 sm:p-8">
               <div className="flex flex-col sm:flex-row gap-6 mb-6">
                 {location && (
                   <div className="flex-1 border-b border-eco-900/10 pb-4">
-                    <p className="text-[10px] font-bold text-eco-400 uppercase tracking-widest mb-1 flex items-center gap-1"><MapPin className="w-3 h-3"/> Coordinates</p>
+                    <p className="text-[10px] font-bold text-eco-400 uppercase tracking-widest mb-1 flex items-center gap-1"><MapPin className="w-3 h-3"/> {t('coordinates')}</p>
                     <p className="text-sm font-mono text-eco-900">{location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}</p>
                   </div>
                 )}
                 {nearestBin && (
                   <div className="flex-1 border-b border-eco-900/10 pb-4">
-                    <p className="text-[10px] font-bold text-eco-600 uppercase tracking-widest mb-1 flex items-center gap-1">Detected Target</p>
+                    <p className="text-[10px] font-bold text-eco-600 uppercase tracking-widest mb-1 flex items-center gap-1">{t('detectedTarget')}</p>
                     <div className="flex items-center justify-between">
                       <p className="font-serif text-lg text-eco-900">{nearestBin.bin_code}</p>
                       <span className="text-xs text-eco-500 font-mono">{Math.round(nearestBin.distance)}m</span>
@@ -369,10 +373,10 @@ export default function UserDashboard() {
               </div>
               <div className="flex gap-4">
                 <button onClick={handleCapture} className="btn-editorial btn-editorial-primary flex-1">
-                  Capture Image
+                  {t('captureImage')}
                 </button>
                 <button onClick={handleCancel} className="btn-editorial btn-editorial-secondary flex-1">
-                  Cancel
+                  {t('cancel')}
                 </button>
               </div>
             </div>
@@ -384,7 +388,7 @@ export default function UserDashboard() {
             <div className="card-header-editorial">
               <h3 className="font-serif text-3xl text-eco-900 flex items-center gap-3">
                 <Sparkles className="w-5 h-5 text-eco-400" />
-                Diagnostic Analysis
+                {t('diagnosticAnalysis')}
               </h3>
             </div>
             <div className="card-body-editorial p-0">
@@ -408,14 +412,14 @@ export default function UserDashboard() {
                   {analyzing ? (
                     <div className="text-center">
                       <Loader className="w-6 h-6 animate-spin text-eco-300 mx-auto mb-4" />
-                      <p className="font-serif text-2xl text-eco-900 mb-2">Analyzing...</p>
-                      <p className="text-xs font-light text-eco-500 uppercase tracking-widest">Evaluating parameters</p>
+                      <p className="font-serif text-2xl text-eco-900 mb-2">{t('analyzingCard')}</p>
+                      <p className="text-xs font-light text-eco-500 uppercase tracking-widest">{t('evaluatingParams')}</p>
                     </div>
                   ) : analysis ? (
                     <div className="space-y-8">
                       <div>
                         <div className="flex justify-between items-end mb-3">
-                          <span className="text-[10px] font-bold text-eco-500 tracking-[0.2em] uppercase">Fill Volume</span>
+                          <span className="text-[10px] font-bold text-eco-500 tracking-[0.2em] uppercase">{t('fillVolume')}</span>
                           <span className="font-serif text-4xl text-eco-900">{analysis.fillPercentage.toFixed(0)}<span className="text-xl text-eco-400 font-sans">%</span></span>
                         </div>
                         <div className="h-1 w-full bg-eco-100 relative">
@@ -425,22 +429,25 @@ export default function UserDashboard() {
 
                       <div className="grid grid-cols-2 gap-8">
                         <div>
-                          <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest block mb-2">Severity</span>
-                          <span className={getSeverityBadge(analysis.severity)}>{analysis.severity}</span>
+                          <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest block mb-2">{t('severityLow')} / {t('severityHigh')}</span>
+                          {(() => {
+                            const badge = getSeverityBadge(analysis.severity)
+                            return <span className={badge.className}>{badge.label}</span>
+                          })()}
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest block mb-2">Confidence</span>
+                          <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest block mb-2">{t('confidence')}</span>
                           <span className="font-mono text-lg text-eco-900">{analysis.confidence.toFixed(0)}%</span>
                         </div>
                       </div>
 
                       <div className="pt-4 border-t border-eco-900/10">
-                        <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest block mb-2">Classification</span>
+                        <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest block mb-2">{t('classification')}</span>
                         <span className="font-serif text-xl text-eco-900">{analysis.wasteType}</span>
                       </div>
 
                       <button onClick={handleReset} className="btn-editorial btn-editorial-secondary w-full mt-4">
-                        Submit Next Report
+                        {t('submitNextReport')}
                       </button>
                     </div>
                   ) : null}
@@ -450,36 +457,35 @@ export default function UserDashboard() {
           </div>
         )}
 
-        {/* Request Bin Here Modal */}
         {showBinRequestModal && (
           <div className="modal-overlay-editorial">
             <div className="card-editorial w-full max-w-md bg-white">
               <div className="card-header-editorial bg-indigo-900 text-white border-none flex justify-between items-center">
                 <h3 className="font-serif text-xl flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-indigo-300" /> Request a Bin Here
+                  <MapPin className="w-5 h-5 text-indigo-300" /> {t('requestBinModalTitle')}
                 </h3>
                 <span className="text-[10px] font-mono uppercase bg-white/20 px-2 py-0.5 rounded">GPS PIN</span>
               </div>
               <div className="card-body-editorial space-y-6 p-6">
                 <p className="text-xs text-eco-700 leading-relaxed">
-                  Notice an area in VJTI where waste accumulates because there is no bin nearby? Submit this pin to alert campus planning.
+                  {t('requestBinModalSub')}
                 </p>
 
                 {location && (
                   <div className="p-3 bg-eco-50 border border-eco-900/10 font-mono text-xs text-eco-900 flex justify-between">
-                    <span>Target GPS:</span>
+                    <span>{t('targetGps')}:</span>
                     <span>{location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}</span>
                   </div>
                 )}
 
                 <div>
-                  <label className="label-editorial">Specific Location / Why is a bin needed here?</label>
+                  <label className="label-editorial">{t('whyNeededLabel')}</label>
                   <textarea
                     rows={3}
                     value={binRequestNotes}
                     onChange={(e) => setBinRequestNotes(e.target.value)}
                     className="input-editorial border border-eco-900/20 p-2 text-xs"
-                    placeholder="e.g. Near the quad benches, students leave juice boxes between 1-2 PM..."
+                    placeholder={t('whyNeededPlaceholder')}
                   />
                 </div>
 
@@ -489,13 +495,13 @@ export default function UserDashboard() {
                     disabled={submittingRequest}
                     className="btn-editorial bg-indigo-700 hover:bg-indigo-800 text-white flex-1 py-3 text-xs"
                   >
-                    {submittingRequest ? 'Registering Pin...' : 'Drop Pin Request'}
+                    {submittingRequest ? t('registeringPin') : t('dropPinRequestBtn')}
                   </button>
                   <button
                     onClick={() => setShowBinRequestModal(false)}
                     className="btn-editorial btn-editorial-ghost py-3 text-xs"
                   >
-                    Cancel
+                    {t('cancel')}
                   </button>
                 </div>
               </div>
@@ -506,61 +512,64 @@ export default function UserDashboard() {
         <div className="card-editorial">
           <div className="card-header-editorial flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h3 className="font-serif text-2xl text-eco-900">Recent Logs</h3>
-              <span className="text-xs font-mono text-eco-500">{myReports.length} ENTRIES</span>
+              <h3 className="font-serif text-2xl text-eco-900">{t('recentLogs')}</h3>
+              <span className="text-xs font-mono text-eco-500">{myReports.length} {t('entries')}</span>
             </div>
             <div className="flex gap-4">
               <select 
                 value={severityFilter} 
                 onChange={e => setSeverityFilter(e.target.value)}
-                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+                className="input-editorial py-2 text-xs w-36 border-eco-900/20 bg-transparent"
               >
-                <option value="all">All Severities</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
+                <option value="all">{t('allSeverities')}</option>
+                <option value="high">{t('severityHighFilter')}</option>
+                <option value="medium">{t('severityMedFilter')}</option>
+                <option value="low">{t('severityLowFilter')}</option>
               </select>
               <select 
                 value={sortBy} 
                 onChange={e => setSortBy(e.target.value)}
-                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+                className="input-editorial py-2 text-xs w-36 border-eco-900/20 bg-transparent"
               >
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="severity">Highest Severity</option>
-                <option value="fill">Highest Fill</option>
+                <option value="newest">{t('sortNewest')}</option>
+                <option value="oldest">{t('sortOldest')}</option>
+                <option value="severity">{t('sortPriority')}</option>
+                <option value="fill">{t('sortFill')}</option>
               </select>
             </div>
           </div>
 
           {displayedReports.length === 0 ? (
             <div className="card-body-editorial text-center py-16">
-              <p className="font-serif text-2xl text-eco-400 italic">No logs found.</p>
+              <p className="font-serif text-2xl text-eco-400 italic">{t('noLogsFound')}</p>
             </div>
           ) : (
             <div className="divide-y divide-eco-900/10">
-              {displayedReports.map((report) => (
-                <div key={report.id} className="p-8 hover:bg-eco-50/50 transition-colors">
-                  <div className="flex flex-col sm:flex-row justify-between gap-6">
-                    <div>
-                      <div className="flex items-center gap-4 mb-3">
-                        <span className="font-serif text-2xl text-eco-900">{report.bins?.bin_code}</span>
-                        <span className={getSeverityBadge(report.severity)}>{report.severity}</span>
+              {displayedReports.map((report) => {
+                const badge = getSeverityBadge(report.severity)
+                return (
+                  <div key={report.id} className="p-8 hover:bg-eco-50/50 transition-colors">
+                    <div className="flex flex-col sm:flex-row justify-between gap-6">
+                      <div>
+                        <div className="flex items-center gap-4 mb-3">
+                          <span className="font-serif text-2xl text-eco-900">{report.bins?.bin_code}</span>
+                          <span className={badge.className}>{badge.label}</span>
+                        </div>
+                        <p className="text-xs font-bold tracking-widest uppercase text-eco-600 mb-2">{report.bins?.location_name}</p>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-mono text-eco-800">{report.fill_percentage?.toFixed(0)}% {t('full')}</span>
+                          <span className="text-eco-300">|</span>
+                          <span className="text-xs text-eco-500 uppercase">{report.waste_type}</span>
+                        </div>
                       </div>
-                      <p className="text-xs font-bold tracking-widest uppercase text-eco-600 mb-2">{report.bins?.location_name}</p>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-mono text-eco-800">{report.fill_percentage?.toFixed(0)}% FULL</span>
-                        <span className="text-eco-300">|</span>
-                        <span className="text-xs text-eco-500 uppercase">{report.waste_type}</span>
+                      <div className="text-[10px] font-bold tracking-[0.2em] text-eco-400 sm:text-right uppercase flex flex-col gap-1 items-start sm:items-end">
+                        <span>{new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        <span className="font-mono">{new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
-                    </div>
-                    <div className="text-[10px] font-bold tracking-[0.2em] text-eco-400 sm:text-right uppercase flex flex-col gap-1 items-start sm:items-end">
-                      <span>{new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                      <span className="font-mono">{new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

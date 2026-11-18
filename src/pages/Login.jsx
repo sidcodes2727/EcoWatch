@@ -12,6 +12,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { signIn } = useAuth()
+  const { t } = useLanguage()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
@@ -30,7 +31,9 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-grid-pattern bg-grid-size relative">
-      <div className="absolute top-8 right-8 z-50"><LanguageToggle /></div>
+      <div className="absolute top-8 right-8 z-50">
+        <LanguageToggle />
+      </div>
       <Link to="/" className="absolute top-8 left-8 flex items-center gap-2">
         <Leaf className="w-5 h-5 text-eco-900" strokeWidth={1.5} />
         <span className="font-serif text-lg tracking-[0.2em] text-eco-900 uppercase">EcoWatch</span>
@@ -38,8 +41,8 @@ export default function Login() {
 
       <div className="w-full max-w-md z-10">
         <div className="text-center mb-12">
-          <h1 className="font-serif text-5xl text-eco-900 tracking-tight mb-4">Welcome back</h1>
-          <p className="text-eco-600 font-light text-sm tracking-wide">Enter your credentials to access your dashboard</p>
+          <h1 className="font-serif text-5xl text-eco-900 tracking-tight mb-4">{t('welcomeBack')}</h1>
+          <p className="text-eco-600 font-light text-sm tracking-wide">{t('enterCredentials')}</p>
         </div>
 
         <div className="card-editorial card-body-editorial bg-white/90 backdrop-blur-xl">
@@ -52,7 +55,7 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-8">
             <div>
-              <label className="label-editorial">Email address</label>
+              <label className="label-editorial">{t('emailAddress')}</label>
               <input
                 type="email"
                 value={email}
@@ -64,7 +67,7 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="label-editorial">Password</label>
+              <label className="label-editorial">{t('password')}</label>
               <div className="relative">
                 <input
                   type={showPwd ? 'text' : 'password'}
@@ -89,26 +92,26 @@ export default function Login() {
               disabled={loading}
               className="btn-editorial btn-editorial-primary w-full mt-4"
             >
-              {loading ? 'Authenticating...' : 'Sign In'}
+              {loading ? t('authenticating') : t('signIn')}
             </button>
           </form>
 
           <div className="mt-8 text-center text-xs tracking-wider border-t border-eco-900/10 pt-8">
-            <span className="text-eco-500">Don't have an account? </span>
+            <span className="text-eco-500">{t('dontHaveAccount')} </span>
             <Link to="/register" className="text-eco-900 font-bold hover:text-accent transition-colors">
-              CREATE ONE
+              {t('createOne')}
             </Link>
           </div>
         </div>
 
         <div className="mt-12 text-center border border-eco-900/10 bg-white/50 p-6 backdrop-blur-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-eco-500 mb-4">Demo Credentials</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-eco-500 mb-4">{t('demoCredentials')}</p>
           <div className="flex justify-center gap-6 mb-4">
             {['user', 'worker', 'admin'].map(role => (
               <span key={role} className="text-xs font-serif italic text-eco-900">{role}@campus.edu</span>
             ))}
           </div>
-          <p className="text-xs text-eco-600">Password: <span className="font-bold">password123</span></p>
+          <p className="text-xs text-eco-600">{t('password')}: <span className="font-bold">password123</span></p>
         </div>
       </div>
     </div>

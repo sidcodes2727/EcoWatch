@@ -9,15 +9,12 @@ import {
   LineChart, Line
 } from 'recharts'
 import {
-  CheckCircle, AlertTriangle, Clock, Server,
-  LogOut, Zap, Loader, Calendar, Layers, Activity, Map as MapIcon
+  CheckCircle, AlertCircle, Loader, Layers, Map as MapIcon, Zap
 } from 'lucide-react'
 import Map, { Marker, Popup, NavigationControl } from 'react-map-gl/maplibre'
 
-// Accessible, color-blind safe severity icons with distinct geometric shapes
 const BinMarkerIcon = ({ severity }) => {
   if (severity === 'high') {
-    // Red Octagon with exclamation mark (Critical)
     return (
       <div className="relative flex items-center justify-center filter drop-shadow-md hover:scale-125 transition-transform" title="Critical Severity - High Fill">
         <svg width="34" height="34" viewBox="0 0 24 24" fill="#dc2626" stroke="#ffffff" strokeWidth="1.5">
@@ -29,7 +26,6 @@ const BinMarkerIcon = ({ severity }) => {
     )
   }
   if (severity === 'medium') {
-    // Amber Triangle with warning indicator (Medium)
     return (
       <div className="relative flex items-center justify-center filter drop-shadow-md hover:scale-125 transition-transform" title="Medium Severity">
         <svg width="30" height="30" viewBox="0 0 24 24" fill="#d97706" stroke="#ffffff" strokeWidth="1.5">
@@ -40,7 +36,6 @@ const BinMarkerIcon = ({ severity }) => {
       </div>
     )
   }
-  // Forest Green Circle with checkmark (Low/Normal)
   return (
     <div className="relative flex items-center justify-center filter drop-shadow-md hover:scale-125 transition-transform" title="Low Severity - Normal">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="#15803d" stroke="#ffffff" strokeWidth="1.5">
@@ -51,9 +46,8 @@ const BinMarkerIcon = ({ severity }) => {
   )
 }
 
-// Explainable Ghost Pin for AI Bin Recommendations
 const GhostMarkerIcon = () => (
-  <div className="relative flex items-center justify-center cursor-pointer group" title="Proposed Bin Location (Explainable AI)">
+  <div className="relative flex items-center justify-center cursor-pointer group" title="Proposed Bin Location">
     <div className="absolute -inset-2 rounded-full bg-indigo-500/30 animate-ping pointer-events-none" />
     <svg width="36" height="36" viewBox="0 0 24 24" fill="#6366f1" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="2 2" className="filter drop-shadow-lg group-hover:scale-125 transition-transform">
       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
@@ -82,14 +76,12 @@ export default function AdminDashboard() {
   const [scheduleError, setScheduleError] = useState('')
   const [scheduleSuccess, setScheduleSuccess] = useState('')
 
-  // Part A3: Explainable Bin Placement Suggestions & What-If Simulation State
   const [showSuggestions, setShowSuggestions] = useState(true)
   const [whatIfBudget, setWhatIfBudget] = useState(3)
   const [whatIfRadius, setWhatIfRadius] = useState(45)
   const [selectedGhostBin, setSelectedGhostBin] = useState(null)
   const [deployingBin, setDeployingBin] = useState(false)
 
-  // Candidate demand zones computed from campus reports & footfall priors
   const allCandidateSuggestions = [
     {
       id: 'SUGG-CAFE-01',
@@ -103,7 +95,7 @@ export default function AdminDashboard() {
       demandScore: 94,
       peakHours: '12:30 PM - 2:15 PM',
       nearestExistingDist: 82,
-      reason: '16 overflow reports in last 10 days during lunch rush. Nearest bin is 82m away, exceeding your 45m walk radius threshold.'
+      reason: language === 'hi' ? 'दोपहर के समय पिछले 10 दिनों में 16 बार डस्टबिन भरने की रिपोर्ट दर्ज हुई। नजदीकी डस्टबिन 82 मीटर दूर है।' : '16 overflow reports in last 10 days during lunch rush. Nearest bin is 82m away, exceeding your walk radius.'
     },
     {
       id: 'SUGG-LIB-01',
@@ -117,7 +109,7 @@ export default function AdminDashboard() {
       demandScore: 81,
       peakHours: '3:00 PM - 5:30 PM',
       nearestExistingDist: 65,
-      reason: 'Continuous paper and beverage container accumulation from exam study halls. Footfall density 1.4x baseline.'
+      reason: language === 'hi' ? 'परीक्षा अध्ययन कक्षों से लगातार कागज और पेय पदार्थों के डिब्बे जमा होते हैं। आवाजाही सामान्य से 1.4 गुना अधिक है।' : 'Continuous paper and beverage container accumulation from exam study halls. Footfall density 1.4x baseline.'
     },
     {
       id: 'SUGG-MECH-01',
@@ -131,7 +123,7 @@ export default function AdminDashboard() {
       demandScore: 73,
       peakHours: '4:30 PM - 6:30 PM',
       nearestExistingDist: 90,
-      reason: 'High recreational student footfall at dusk. Citizen dropped-pin requests logged 4 times this week.'
+      reason: language === 'hi' ? 'शाम के समय छात्रों की अधिक आवाजाही। इस सप्ताह 4 छात्रों ने इस स्थान के लिए नया पिन दर्ज किया।' : 'High recreational student footfall at dusk. Citizen dropped-pin requests logged 4 times this week.'
     },
     {
       id: 'SUGG-HOSTEL-01',
@@ -145,7 +137,7 @@ export default function AdminDashboard() {
       demandScore: 68,
       peakHours: '8:00 AM - 10:00 AM',
       nearestExistingDist: 74,
-      reason: 'Morning breakfast packet rush. High demand signal from student corridor reports.'
+      reason: language === 'hi' ? 'सुबह नाश्ते के समय पैकेजिंग कचरे की अधिकता।' : 'Morning breakfast packet rush. High demand signal from student corridor reports.'
     },
     {
       id: 'SUGG-IT-01',
@@ -159,14 +151,11 @@ export default function AdminDashboard() {
       demandScore: 62,
       peakHours: '1:00 PM - 3:00 PM',
       nearestExistingDist: 58,
-      reason: 'Lab area beverage cup disposal demand. Walking radius uncovered by existing CS bins.'
+      reason: language === 'hi' ? 'लैब क्षेत्र में चाय/कॉफ़ी कप निष्कासन की आवश्यकता।' : 'Lab area beverage cup disposal demand. Walking radius uncovered by existing CS bins.'
     }
   ]
 
-  // Filter candidates by what-if budget
   const activeGhostPins = allCandidateSuggestions.slice(0, whatIfBudget)
-
-  // Compute estimated campus coverage percentage from what-if sliders
   const estimatedCoverage = Math.min(Math.round(62 + (whatIfBudget * 5.5) + ((whatIfRadius - 30) * 0.4)), 98)
 
   const handleDeployGhostBin = async (ghost) => {
@@ -186,11 +175,11 @@ export default function AdminDashboard() {
       })
       if (error) throw error
       setSelectedGhostBin(null)
-      setScheduleSuccess(`Deployed ${ghost.recommendedCount} bin(s) to ${ghost.locationName}!`)
+      setScheduleSuccess(language === 'hi' ? `${ghost.locationName} पर ${ghost.recommendedCount} डस्टबिन सफलतापूर्वक स्थापित!` : `Deployed ${ghost.recommendedCount} bin(s) to ${ghost.locationName}!`)
       fetchDashboardData()
       setTimeout(() => setScheduleSuccess(''), 5000)
     } catch (err) {
-      setScheduleError('Failed to deploy bin: ' + err.message)
+      setScheduleError((language === 'hi' ? 'स्थापना में त्रुटि: ' : 'Failed to deploy bin: ') + err.message)
     } finally {
       setDeployingBin(false)
     }
@@ -237,7 +226,8 @@ export default function AdminDashboard() {
       })
 
       const last7Days = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(); d.setDate(d.getDate() - i)
+        const d = new Date()
+        d.setDate(d.getDate() - i)
         return d.toISOString().split('T')[0]
       }).reverse()
 
@@ -247,53 +237,74 @@ export default function AdminDashboard() {
           ? dayReports.reduce((sum, r) => sum + r.fill_percentage, 0) / dayReports.length
           : 0
         return {
-          date: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+          date: new Date(date).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-US', { weekday: 'short' }),
           reports: dayReports.length,
           avgFill: Math.round(avgFill)
         }
       })
       setTrends(trendData)
-    } catch (error) { console.error('Error loading admin data:', error) }
-    finally { setLoading(false) }
+    } catch (error) {
+      console.error('Error loading admin data:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleGenerateSchedule = async () => {
-    setGeneratingSchedule(true); setScheduleError(''); setScheduleSuccess(''); setSchedule(null)
+    setGeneratingSchedule(true)
+    setScheduleError('')
+    setScheduleSuccess('')
+    setSchedule(null)
     try {
       const historicalData = reports.map((r) => ({
-        binId: r.bin_id, binCode: r.bins?.bin_code,
-        department: r.bins?.department, locationName: r.bins?.location_name,
-        fillPercentage: r.fill_percentage, severity: r.severity,
-        wasteType: r.waste_type, reportedAt: r.created_at
+        binId: r.bin_id,
+        binCode: r.bins?.bin_code,
+        department: r.bins?.department,
+        locationName: r.bins?.location_name,
+        fillPercentage: r.fill_percentage,
+        severity: r.severity,
+        wasteType: r.waste_type,
+        reportedAt: r.created_at
       }))
       const result = await generateCleaningSchedule(historicalData)
       setSchedule(result.schedule)
       setScheduleStats(result.stats)
-      setScheduleSuccess('Strategic plan formulated. Review details below.')
+      setScheduleSuccess(language === 'hi' ? 'रणनीतिक योजना तैयार कर ली गई है।' : 'Strategic plan formulated. Review details below.')
       setTimeout(() => setScheduleSuccess(''), 5000)
-    } catch (err) { setScheduleError('Failed to formulate plan') }
-    finally { setGeneratingSchedule(false) }
+    } catch {
+      setScheduleError(language === 'hi' ? 'रणनीति निर्माण में त्रुटि' : 'Failed to formulate plan')
+    } finally {
+      setGeneratingSchedule(false)
+    }
   }
 
   const handleApplySchedule = async () => {
     if (!schedule) return
-    setApplyingSchedule(true); setScheduleError(''); setScheduleSuccess('')
+    setApplyingSchedule(true)
+    setScheduleError('')
+    setScheduleSuccess('')
     try {
       const tasksToCreate = schedule.map((item) => {
         const priority = item.priority === 'high' ? 1 : item.priority === 'medium' ? 2 : 3
         return {
-          bin_id: item.binId, status: 'pending', priority,
+          bin_id: item.binId,
+          status: 'pending',
+          priority,
           notes: `[DIRECTIVE] ${item.timeSlot.toUpperCase()} | ${item.reason}`,
           is_predicted: true
         }
       })
       const { error } = await supabase.from('cleaning_tasks').insert(tasksToCreate)
       if (error) throw error
-      setScheduleSuccess('Strategic plan dispatched to operations')
-      setSchedule(null); fetchDashboardData()
+      setScheduleSuccess(language === 'hi' ? 'रणनीतिक योजना सफाई कर्मचारियों को भेज दी गई है।' : 'Strategic plan dispatched to operations')
+      setSchedule(null)
+      fetchDashboardData()
       setTimeout(() => setScheduleSuccess(''), 5000)
-    } catch (err) { setScheduleError('Dispatch failed') }
-    finally { setApplyingSchedule(false) }
+    } catch {
+      setScheduleError(language === 'hi' ? 'भेजने में त्रुटि' : 'Dispatch failed')
+    } finally {
+      setApplyingSchedule(false)
+    }
   }
 
   const getSeverityBadge = (s) => {
@@ -301,9 +312,30 @@ export default function AdminDashboard() {
     return `badge-editorial ${map[s] || 'badge-slate'}`
   }
 
+  const getSeverityLabel = (s) => {
+    if (s === 'high') return t('severityHigh')
+    if (s === 'medium') return t('severityMedium')
+    return t('severityLow')
+  }
+
   const getTaskStatusBadge = (s) => {
     const map = { pending: 'badge-yellow', assigned: 'badge-slate', in_progress: 'badge-eco', completed: 'badge-eco' }
     return `badge-editorial ${map[s] || 'badge-slate'}`
+  }
+
+  const getTaskStatusLabel = (s) => {
+    if (s === 'pending') return t('statusPending')
+    if (s === 'assigned') return t('statusAssigned')
+    if (s === 'in_progress') return t('statusInProgress')
+    if (s === 'completed') return t('statusCompleted')
+    return s
+  }
+
+  const getPhaseName = (slot) => {
+    if (slot === 'morning') return t('phaseMorning')
+    if (slot === 'midday') return t('phaseMidday')
+    if (slot === 'afternoon') return t('phaseAfternoon')
+    return t('phaseEvening')
   }
 
   if (loading) {
@@ -311,7 +343,7 @@ export default function AdminDashboard() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Loader className="w-8 h-8 animate-spin text-eco-900 mx-auto mb-6" strokeWidth={1} />
-          <h2 className="font-serif text-3xl text-eco-900 italic">Initializing Systems...</h2>
+          <h2 className="font-serif text-3xl text-eco-900 italic">{t('initializingSystems')}</h2>
         </div>
       </div>
     )
@@ -319,22 +351,25 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen">
-
       <nav className="nav-header">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Layers className="w-5 h-5 text-eco-900" strokeWidth={1.5} />
             <div className="flex items-center gap-4">
-              <h1 className="font-serif text-lg tracking-[0.2em] text-eco-900 uppercase">Command Center</h1>
+              <h1 className="font-serif text-lg tracking-[0.2em] text-eco-900 uppercase">{t('admin')}</h1>
               <span className="text-eco-300">|</span>
-              <p className="text-[10px] font-bold tracking-[0.2em] text-eco-600 uppercase">Administrator</p>
+              <p className="text-[10px] font-bold tracking-[0.2em] text-eco-600 uppercase">{t('roleAdmin')}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-6">
-            <button onClick={handleGenerateSchedule} disabled={generatingSchedule} className="text-[10px] font-bold tracking-[0.2em] uppercase text-eco-600 hover:text-eco-900 transition-colors flex items-center gap-2">
+            <button
+              onClick={handleGenerateSchedule}
+              disabled={generatingSchedule}
+              className="text-[10px] font-bold tracking-[0.2em] uppercase text-eco-600 hover:text-eco-900 transition-colors flex items-center gap-2"
+            >
               {generatingSchedule ? <Loader className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-              {generatingSchedule ? 'Formulating...' : 'Formulate Strategy'}
+              {generatingSchedule ? t('formulating') : t('formulateStrategy')}
             </button>
             <span className="text-eco-300">|</span>
             <div className="flex items-center gap-4">
@@ -348,7 +383,6 @@ export default function AdminDashboard() {
       </nav>
 
       <div className="dashboard-container">
-
         {scheduleError && (
           <div className="alert-error mb-12">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -362,14 +396,13 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Stats Grid */}
         {stats && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 border border-eco-900/10 mb-16 bg-white">
             {[
-              { label: 'Total Incidents', value: stats.totalReports },
-              { label: 'Active Tasks', value: stats.activeTasks },
-              { label: 'Resolved', value: stats.completedCleanings },
-              { label: 'Avg Time (min)', value: stats.avgResponseTime }
+              { label: t('totalIncidents'), value: stats.totalReports },
+              { label: t('activeTasks'), value: stats.activeTasks },
+              { label: t('resolved'), value: stats.completedCleanings },
+              { label: t('avgTimeMin'), value: stats.avgResponseTime }
             ].map((card, idx) => (
               <div key={card.label} className={`p-8 ${idx !== 3 ? 'border-r border-eco-900/10' : ''} ${idx > 1 ? 'border-t lg:border-t-0 border-eco-900/10' : ''}`}>
                 <p className="text-[10px] font-bold text-eco-500 uppercase tracking-widest mb-4">{card.label}</p>
@@ -379,24 +412,21 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Global Live Map & What-If Spatial Simulator */}
         <div className="card-editorial mb-16 border-eco-900/10 flex flex-col">
-          {/* What-If Control Header */}
           <div className="p-6 bg-eco-900 text-eco-50 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 border-b border-eco-50/10">
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse" />
                 <h3 className="font-serif text-2xl tracking-tight text-white flex items-center gap-2">
-                  <MapIcon className="w-5 h-5 text-indigo-300" /> Spatial Intelligence & Bin Placement
+                  <MapIcon className="w-5 h-5 text-indigo-300" /> {t('liveGrid')}
                 </h3>
               </div>
               <p className="text-xs text-eco-300 font-light">
-                Direct-manipulation coverage optimization based on citizen demand signals and footfall patterns
+                {t('spatialSub')}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-6 text-xs">
-              {/* Toggle Suggestions */}
               <label className="flex items-center gap-2 cursor-pointer bg-white/10 px-3 py-1.5 rounded border border-white/20">
                 <input
                   type="checkbox"
@@ -404,12 +434,11 @@ export default function AdminDashboard() {
                   onChange={(e) => setShowSuggestions(e.target.checked)}
                   className="accent-indigo-400 rounded"
                 />
-                <span className="font-bold tracking-wider uppercase text-[10px]">Show Ghost Pins</span>
+                <span className="font-bold tracking-wider uppercase text-[10px]">{t('showGhostPins')}</span>
               </label>
 
-              {/* What-If Budget Slider */}
               <div className="flex items-center gap-3">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-eco-400">Budget:</span>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-eco-400">{t('budget')}:</span>
                 <input
                   type="range"
                   min="1"
@@ -418,12 +447,11 @@ export default function AdminDashboard() {
                   onChange={(e) => setWhatIfBudget(parseInt(e.target.value))}
                   className="w-24 accent-indigo-400"
                 />
-                <span className="font-mono font-bold text-white bg-white/10 px-2 py-0.5 rounded">{whatIfBudget} Bins</span>
+                <span className="font-mono font-bold text-white bg-white/10 px-2 py-0.5 rounded">{t('binsCount', whatIfBudget)}</span>
               </div>
 
-              {/* Walk Radius Slider */}
               <div className="flex items-center gap-3">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-eco-400">Walk Radius:</span>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-eco-400">{t('walkRadius')}:</span>
                 <input
                   type="range"
                   min="30"
@@ -433,41 +461,38 @@ export default function AdminDashboard() {
                   onChange={(e) => setWhatIfRadius(parseInt(e.target.value))}
                   className="w-24 accent-indigo-400"
                 />
-                <span className="font-mono font-bold text-white bg-white/10 px-2 py-0.5 rounded">{whatIfRadius}m</span>
+                <span className="font-mono font-bold text-white bg-white/10 px-2 py-0.5 rounded">{t('metersUnit', whatIfRadius)}</span>
               </div>
 
-              {/* Projected Coverage Metric */}
               <div className="border-l border-white/20 pl-4">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-eco-400 block">Coverage</span>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-eco-400 block">{t('coverage')}</span>
                 <span className="font-serif text-lg font-bold text-indigo-300">{estimatedCoverage}%</span>
               </div>
             </div>
           </div>
 
-          {/* Accessible Shape & Color Legend */}
           <div className="px-6 py-2 bg-eco-50 border-b border-eco-900/10 flex flex-wrap items-center gap-6 text-[10px] font-bold uppercase tracking-wider text-eco-700">
-            <span className="text-eco-400 font-mono">LEGEND:</span>
+            <span className="text-eco-400 font-mono">{t('legendLabel')}</span>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]" />
-              <span>Low (● Circle)</span>
+              <span>{t('legendLow')}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 bg-[#d97706] rotate-45 transform" />
-              <span>Medium (◆ Diamond)</span>
+              <span>{t('legendMed')}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 bg-[#dc2626] rounded-xs flex items-center justify-center text-white text-[8px] font-bold">!</span>
-              <span>Critical (🛑 Octagon)</span>
+              <span>{t('legendCrit')}</span>
             </div>
             {showSuggestions && (
               <div className="flex items-center gap-1.5 text-indigo-700">
                 <span className="w-2.5 h-2.5 rounded-full border-2 border-dashed border-indigo-600 animate-pulse" />
-                <span>AI Proposed Site (📍 Ghost Pin)</span>
+                <span>{t('legendGhost')}</span>
               </div>
             )}
           </div>
 
-          {/* 3D Map Viewport */}
           <div className="h-[520px] relative w-full">
             <Map
               initialViewState={{
@@ -483,7 +508,6 @@ export default function AdminDashboard() {
             >
               <NavigationControl position="bottom-right" visualizePitch={true} />
               
-              {/* Existing Campus Bins */}
               {bins.map(bin => (
                 <Marker
                   key={bin.id}
@@ -491,16 +515,15 @@ export default function AdminDashboard() {
                   latitude={bin.latitude}
                   anchor="bottom"
                   onClick={e => {
-                    e.originalEvent.stopPropagation();
-                    setSelectedGhostBin(null);
-                    setSelectedBin(bin);
+                    e.originalEvent.stopPropagation()
+                    setSelectedGhostBin(null)
+                    setSelectedBin(bin)
                   }}
                 >
                   <BinMarkerIcon severity={bin.current_severity} />
                 </Marker>
               ))}
 
-              {/* AI Proposed Ghost Pins */}
               {showSuggestions && activeGhostPins.map((ghost) => (
                 <Marker
                   key={ghost.id}
@@ -508,16 +531,15 @@ export default function AdminDashboard() {
                   latitude={ghost.latitude}
                   anchor="bottom"
                   onClick={e => {
-                    e.originalEvent.stopPropagation();
-                    setSelectedBin(null);
-                    setSelectedGhostBin(ghost);
+                    e.originalEvent.stopPropagation()
+                    setSelectedBin(null)
+                    setSelectedGhostBin(ghost)
                   }}
                 >
                   <GhostMarkerIcon />
                 </Marker>
               ))}
 
-              {/* Existing Bin Details Popup */}
               {selectedBin && (
                 <Popup
                   longitude={selectedBin.longitude}
@@ -533,16 +555,15 @@ export default function AdminDashboard() {
                     <p className="text-xs text-eco-600 mb-2">{selectedBin.location_name}</p>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] uppercase font-bold tracking-widest ${selectedBin.current_severity === 'high' ? 'text-red-600' : selectedBin.current_severity === 'medium' ? 'text-amber-600' : 'text-eco-600'}`}>
-                        {selectedBin.current_severity} severity
+                        {getSeverityLabel(selectedBin.current_severity)}
                       </span>
                       <span className="text-eco-300">|</span>
-                      <span className="text-[10px] font-mono font-bold text-eco-900">{selectedBin.current_fill_percentage}% Full</span>
+                      <span className="text-[10px] font-mono font-bold text-eco-900">{selectedBin.current_fill_percentage}% {t('full')}</span>
                     </div>
                   </div>
                 </Popup>
               )}
 
-              {/* Explainable Ghost Pin Recommendation Popup */}
               {selectedGhostBin && (
                 <Popup
                   longitude={selectedGhostBin.longitude}
@@ -556,9 +577,9 @@ export default function AdminDashboard() {
                   <div className="p-3 max-w-[280px]">
                     <div className="flex items-center justify-between border-b border-eco-900/10 pb-2 mb-2">
                       <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-wider">
-                        AI Recommended Site
+                        {t('aiRecommendedSite')}
                       </span>
-                      <span className="font-mono text-[10px] text-eco-500 font-bold">Score: {selectedGhostBin.demandScore}/100</span>
+                      <span className="font-mono text-[10px] text-eco-500 font-bold">{t('score')}: {selectedGhostBin.demandScore}/100</span>
                     </div>
 
                     <h4 className="font-serif text-base font-bold text-eco-900 leading-tight mb-1">
@@ -566,12 +587,12 @@ export default function AdminDashboard() {
                     </h4>
                     
                     <p className="text-[11px] text-eco-700 mb-3 leading-snug">
-                      <strong>Recommendation:</strong> Add {selectedGhostBin.recommendedCount} bin(s) ({selectedGhostBin.capacityLiters}L each).
+                      <strong>{t('recommendationLabel')}:</strong> {t('recommendationDetail', selectedGhostBin.recommendedCount, selectedGhostBin.capacityLiters)}
                     </p>
 
                     <div className="bg-eco-50 p-2 border border-eco-900/10 mb-3 text-[10px] text-eco-600 space-y-1">
-                      <p><strong>Rationale:</strong> {selectedGhostBin.reason}</p>
-                      <p><strong>Peak Window:</strong> {selectedGhostBin.peakHours}</p>
+                      <p><strong>{t('rationaleLabel')}:</strong> {selectedGhostBin.reason}</p>
+                      <p><strong>{t('peakWindowLabel')}:</strong> {selectedGhostBin.peakHours}</p>
                     </div>
 
                     <div className="flex gap-2">
@@ -580,13 +601,13 @@ export default function AdminDashboard() {
                         disabled={deployingBin}
                         className="btn-editorial bg-indigo-600 hover:bg-indigo-700 text-white flex-1 py-1.5 text-[10px]"
                       >
-                        {deployingBin ? 'Deploying...' : 'Approve & Deploy'}
+                        {deployingBin ? t('deploying') || 'Deploying...' : t('deployGhostBin')}
                       </button>
                       <button
                         onClick={() => setSelectedGhostBin(null)}
                         className="btn-editorial btn-editorial-ghost py-1.5 text-[10px]"
                       >
-                        Dismiss
+                        {t('dismiss')}
                       </button>
                     </div>
                   </div>
@@ -596,18 +617,17 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* AI Schedule Preview */}
         {schedule && schedule.length > 0 && (
           <div className="card-editorial mb-16 border-eco-900">
-            <div className="card-header-editorial bg-eco-900 text-eco-50 border-none p-10 flex-col lg:flex-row gap-8">
+            <div className="card-header-editorial bg-eco-900 text-eco-50 border-none p-10 flex flex-col lg:flex-row justify-between gap-8">
               <div>
-                <h2 className="font-serif text-4xl mb-4">Strategic Plan Generated</h2>
+                <h2 className="font-serif text-4xl mb-4">{t('strategicPlan')}</h2>
                 <p className="text-xs font-light tracking-wide opacity-80 max-w-xl">
-                  Analyzed {scheduleStats?.daysAnalyzed} days of historical records ({scheduleStats?.dataPointsAnalyzed} data points). The following directives have been formulated for optimal resource allocation.
+                  {t('strategicPlanSub', scheduleStats?.daysAnalyzed, scheduleStats?.dataPointsAnalyzed)}
                 </p>
               </div>
-              <button onClick={handleApplySchedule} disabled={applyingSchedule} className="btn-editorial bg-white text-eco-900 hover:bg-eco-50">
-                {applyingSchedule ? 'Dispatching...' : 'Approve & Dispatch'}
+              <button onClick={handleApplySchedule} disabled={applyingSchedule} className="btn-editorial bg-white text-eco-900 hover:bg-eco-50 self-start">
+                {applyingSchedule ? 'Dispatching...' : t('approveDispatch')}
               </button>
             </div>
             <div className="card-body-editorial p-10">
@@ -618,8 +638,8 @@ export default function AdminDashboard() {
                   return (
                     <div key={slot} className="border-t border-eco-900/10 pt-6">
                       <h3 className="text-[10px] font-bold text-eco-900 uppercase tracking-[0.2em] mb-6 flex justify-between">
-                        {slot} Phase
-                        <span className="text-eco-400">{slotItems.length} ops</span>
+                        {getPhaseName(slot)}
+                        <span className="text-eco-400">{slotItems.length} {t('ops')}</span>
                       </h3>
                       <div className="space-y-4">
                         {slotItems.map((item, idx) => (
@@ -627,7 +647,7 @@ export default function AdminDashboard() {
                             <div className="flex justify-between items-start">
                               <span className="font-serif text-xl text-eco-900">{item.binCode}</span>
                               <span className={`text-[10px] uppercase font-bold tracking-widest ${item.priority === 'high' ? 'text-accent' : item.priority === 'medium' ? 'text-amber-600' : 'text-eco-600'}`}>
-                                {item.priority}
+                                {getSeverityLabel(item.priority)}
                               </span>
                             </div>
                             <span className="text-xs font-light text-eco-600 uppercase tracking-wider">{item.locationName}</span>
@@ -635,7 +655,7 @@ export default function AdminDashboard() {
                               <div className="h-px flex-1 bg-eco-900/20 relative">
                                 <div className="absolute top-0 left-0 h-full bg-eco-900" style={{ width: `${item.predictedFill}%` }} />
                               </div>
-                              <span className="text-[10px] font-mono text-eco-500">{item.predictedFill}% projected</span>
+                              <span className="text-[10px] font-mono text-eco-500">{item.predictedFill}% {t('projected')}</span>
                             </div>
                           </div>
                         ))}
@@ -648,11 +668,10 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Charts */}
         <div className="grid lg:grid-cols-2 gap-12 mb-16">
           <div className="card-editorial">
             <div className="card-header-editorial">
-              <h3 className="font-serif text-2xl text-eco-900">Incident Velocity</h3>
+              <h3 className="font-serif text-2xl text-eco-900">{t('incidentVelocity')}</h3>
             </div>
             <div className="card-body-editorial p-6">
               <div className="h-80">
@@ -667,8 +686,8 @@ export default function AdminDashboard() {
                       labelStyle={{ fontSize: '10px', textTransform: 'uppercase', marginBottom: '8px' }}
                     />
                     <Legend iconType="plainline" wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }} />
-                    <Line type="monotone" dataKey="reports" stroke="#1a261e" strokeWidth={2} name="Total Reports" dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                    <Line type="monotone" dataKey="avgFill" stroke="#b86a44" strokeWidth={2} name="Avg Fill (%)" dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="reports" stroke="#1a261e" strokeWidth={2} name={t('totalReportsChart')} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="avgFill" stroke="#b86a44" strokeWidth={2} name={t('avgFillChart')} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -677,7 +696,7 @@ export default function AdminDashboard() {
 
           <div className="card-editorial">
             <div className="card-header-editorial">
-              <h3 className="font-serif text-2xl text-eco-900">Sector Analysis</h3>
+              <h3 className="font-serif text-2xl text-eco-900">{t('sectorAnalysis')}</h3>
             </div>
             <div className="card-body-editorial p-6">
               <div className="h-80">
@@ -702,8 +721,8 @@ export default function AdminDashboard() {
                       labelStyle={{ fontSize: '10px', textTransform: 'uppercase', marginBottom: '8px' }}
                     />
                     <Legend iconType="square" wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }} />
-                    <Bar dataKey="reports" fill="#1a261e" name="Total Reports" maxBarSize={40} />
-                    <Bar dataKey="avgFill" fill="#b86a44" name="Avg Fill (%)" maxBarSize={40} />
+                    <Bar dataKey="reports" fill="#1a261e" name={t('totalReportsChart')} maxBarSize={40} />
+                    <Bar dataKey="avgFill" fill="#b86a44" name={t('avgFillChart')} maxBarSize={40} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -711,26 +730,24 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Lists Grid */}
         <div className="grid lg:grid-cols-2 gap-12">
-
           <div>
-            <h3 className="font-serif text-3xl text-eco-900 mb-6">Recent Logs</h3>
+            <h3 className="font-serif text-3xl text-eco-900 mb-6">{t('recentLogs')}</h3>
             <div className="border-t border-eco-900/10 divide-y divide-eco-900/10">
               {reports.slice(0, 5).map((report) => (
                 <div key={report.id} className="py-6 flex justify-between items-start gap-4">
                   <div>
                     <div className="flex items-center gap-4 mb-2">
                       <span className="font-serif text-xl text-eco-900">{report.bins?.bin_code}</span>
-                      <span className={getSeverityBadge(report.severity)}>{report.severity}</span>
+                      <span className={getSeverityBadge(report.severity)}>{getSeverityLabel(report.severity)}</span>
                     </div>
                     <p className="text-xs font-bold uppercase tracking-widest text-eco-600 mb-1">{report.bins?.location_name}</p>
-                    <p className="text-[10px] font-light text-eco-500 italic">Logged by {report.reporter?.full_name}</p>
+                    <p className="text-[10px] font-light text-eco-500 italic">{t('loggedBy')} {report.reporter?.full_name}</p>
                   </div>
                   <div className="text-right flex flex-col items-end gap-1">
                     <div className="font-serif text-2xl text-eco-900">{report.fill_percentage}<span className="text-sm font-sans text-eco-400">%</span></div>
                     <span className="text-[10px] font-mono text-eco-400 block">
-                      {new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(report.created_at).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-US', { month: 'short', day: 'numeric' })} - {new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 </div>
@@ -739,12 +756,12 @@ export default function AdminDashboard() {
           </div>
 
           <div>
-            <h3 className="font-serif text-3xl text-eco-900 mb-6">Active Operations</h3>
+            <h3 className="font-serif text-3xl text-eco-900 mb-6">{t('activeOperations')}</h3>
             <div className="border-t border-eco-900/10 divide-y divide-eco-900/10">
               {tasks.filter((t) => t.status !== 'completed').length === 0 ? (
                 <div className="py-12 text-center">
-                  <p className="font-serif text-2xl text-eco-400 italic mb-2">Queue clear.</p>
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-eco-500">No pending operations.</p>
+                  <p className="font-serif text-2xl text-eco-400 italic mb-2">{t('queueClear')}</p>
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-eco-500">{t('noPendingOps')}</p>
                 </div>
               ) : (
                 tasks.filter((t) => t.status !== 'completed').slice(0, 5).map((task) => (
@@ -753,17 +770,17 @@ export default function AdminDashboard() {
                       <div className="flex items-center gap-4 mb-2">
                         <span className="font-serif text-xl text-eco-900">{task.bins?.bin_code}</span>
                         <span className={`text-[10px] font-bold tracking-widest uppercase ${task.priority === 1 ? 'text-accent' : task.priority === 2 ? 'text-amber-600' : 'text-eco-600'}`}>
-                          P{task.priority}
+                          {t('priority')} {task.priority}
                         </span>
                       </div>
                       <p className="text-xs font-bold uppercase tracking-widest text-eco-600 mb-1">{task.bins?.location_name}</p>
                       <p className="text-[10px] font-light text-eco-500 italic">
-                        Operator: {task.profiles?.full_name || 'Unassigned'}
+                        {t('operator')}: {task.profiles?.full_name || t('unassigned')}
                       </p>
                     </div>
                     <div className="text-right flex flex-col items-end gap-1">
                       <span className={getTaskStatusBadge(task.status)}>
-                        {task.status.replace('_', ' ')}
+                        {getTaskStatusLabel(task.status)}
                       </span>
                       <span className="text-[10px] font-mono text-eco-400 block mt-1">
                         {new Date(task.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -774,7 +791,6 @@ export default function AdminDashboard() {
               )}
             </div>
           </div>
-
         </div>
       </div>
     </div>

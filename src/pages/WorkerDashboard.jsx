@@ -7,7 +7,7 @@ import { verifyCleaningImage } from '../lib/aiService'
 import { optimizeRoute, formatDistance, formatTime, getTotalEstimatedTime } from '../lib/routeOptimizer'
 import {
   Camera, MapPin, CheckCircle, Navigation,
-  Loader, Upload, Leaf, AlertCircle, Clock, Mic, Volume2
+  Loader, Upload, Leaf, AlertCircle, Clock, Mic, Sparkles
 } from 'lucide-react'
 
 export default function WorkerDashboard() {
@@ -28,8 +28,7 @@ export default function WorkerDashboard() {
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [sortBy, setSortBy] = useState('optimized')
 
-  // Part B1: Hands-Free Push-to-Talk Voice Assistant State
-  const [isListening, setIsListening] = useState(false)
+  const [activeListeningTaskId, setActiveListeningTaskId] = useState(null)
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [voiceResponse, setVoiceResponse] = useState('')
   const recognitionRef = useRef(null)
@@ -44,74 +43,101 @@ export default function WorkerDashboard() {
     window.speechSynthesis.speak(utterance)
   }
 
-  const startVoiceCommand = () => {
+  const startVoiceCommand = (scopeId = 'global') => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) {
-      setError('Voice recognition is not supported in this browser. Please use Chrome or Edge.')
+      setError(language === 'hi' ? 'आपके ब्राउज़र में वॉयस रिकॉग्निशन समर्थित नहीं है। कृपया Chrome का उपयोग करें।' : 'Voice recognition is not supported in this browser. Please use Chrome or Edge.')
       return
     }
 
     try {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort() } catch {}
+      }
+
       const recognition = new SpeechRecognition()
       recognition.continuous = false
       recognition.interimResults = false
       recognition.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
 
       recognition.onstart = () => {
-        setIsListening(true)
-        setVoiceTranscript('Listening...')
+        setActiveListeningTaskId(scopeId)
+        setVoiceTranscript(t('voiceListening'))
       }
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript.toLowerCase()
         setVoiceTranscript(transcript)
-        handleVoiceAction(transcript)
+        handleVoiceAction(transcript, scopeId)
       }
 
       recognition.onerror = (e) => {
-        console.error('Speech recognition error:', e)
-        setIsListening(false)
-        setVoiceTranscript('Voice input stopped')
+        setActiveListeningTaskId(null)
+        setVoiceTranscript('')
       }
 
       recognition.onend = () => {
-        setIsListening(false)
+        setActiveListeningTaskId(null)
       }
 
       recognitionRef.current = recognition
       recognition.start()
     } catch (err) {
-      console.error(err)
-      setIsListening(false)
+      setActiveListeningTaskId(null)
     }
   }
 
   const stopVoiceCommand = () => {
     if (recognitionRef.current) {
-      recognitionRef.current.stop()
+      try {
+        recognitionRef.current.stop()
+      } catch {}
     }
-    setIsListening(false)
+    setActiveListeningTaskId(null)
   }
 
-  const handleVoiceAction = (cmd) => {
-    const activeTasks = displayedTasks.filter(t => t.status !== 'completed')
-    const isHindi = language === 'hi' || /[\u0900-\u097F]/.test(cmd) || cmd.includes('agla') || cmd.includes('safai') || cmd.includes('shuru') || cmd.includes('khatam')
+  const handleVoiceAction = (cmd, scopeId = 'global') => {
+    const activeTasks = displayedTasks.filter(item => item.status !== 'completed')
+    const isHindi = language === 'hi' || /[\u0900-\u097F]/.test(cmd) || cmd.includes('agla') || cmd.includes('safai') || cmd.includes('shuru') || cmd.includes('khatam') || cmd.includes('baaki') || cmd.includes('kitne')
 
-    // 1. Next Stop commands
-    const isNextStop = cmd.includes('next') || cmd.includes('route') || cmd.includes('stop') || cmd.includes('where') ||
-                       cmd.includes('अगला') || cmd.includes('स्टॉप') || cmd.includes('रास्ता') || cmd.includes('कहाँ') || cmd.includes('आगे') || cmd.includes('kahan') || cmd.includes('agla')
+    const isNextStop = cmd.includes('next') || cmd.includes('route') || cmd.includes('stop') || cmd.includes('where') || cmd.includes('target') ||
+                       cmd.includes('अगला') || cmd.includes('स्टॉप') || cmd.includes('रास्ता') || cmd.includes('कहाँ') || cmd.includes('आगे') || cmd.includes('kahan') || cmd.includes('agla') || cmd.includes('kidhar')
 
-    // 2. Start Task commands
-    const isStart = cmd.includes('start') || cmd.includes('begin') || cmd.includes('commence') ||
-                    cmd.includes('शुरू') || cmd.includes('काम') || cmd.includes('सफाई शुरू') || cmd.includes('प्रारंभ') || cmd.includes('shuru')
+    const isStart = cmd.includes('start') || cmd.includes('begin') || cmd.includes('commence') || cmd.includes('accept') ||
+                    cmd.includes('शुरू') || cmd.includes('काम') || cmd.includes('सफाई शुरू') || cmd.includes('प्रारंभ') || cmd.includes('स्वीकार') || cmd.includes('shuru') || cmd.includes('chalu')
 
-    // 3. Verify / Finish commands
-    const isDone = cmd.includes('clean') || cmd.includes('photo') || cmd.includes('verify') || cmd.includes('done') || cmd.includes('finish') ||
-                   cmd.includes('सफाई हो गई') || cmd.includes('साफ') || cmd.includes('हो गया') || cmd.includes('फोटो') || cmd.includes('चेक') || cmd.includes('सत्यापित') || cmd.includes('khatam') || cmd.includes('safai')
+    const isDone = cmd.includes('clean') || cmd.includes('photo') || cmd.includes('verify') || cmd.includes('done') || cmd.includes('finish') || cmd.includes('proof') ||
+                   cmd.includes('सफाई हो गई') || cmd.includes('साफ') || cmd.includes('हो गया') || cmd.includes('फोटो') || cmd.includes('चेक') || cmd.includes('सत्यापित') || cmd.includes('khatam') || cmd.includes('safai') || cmd.includes('tasveer')
 
-    // 4. Status / Count commands
-    const isCount = cmd.includes('how many') || cmd.includes('status') || cmd.includes('count') ||
-                    cmd.includes('कितने') || cmd.includes('बाकी') || cmd.includes('काम बताओ') || cmd.includes('kitne') || cmd.includes('baaki')
+    const isCount = cmd.includes('how many') || cmd.includes('status') || cmd.includes('count') || cmd.includes('pending') || cmd.includes('remaining') ||
+                    cmd.includes('कितने') || cmd.includes('बाकी') || cmd.includes('काम बताओ') || cmd.includes('स्थिति') || cmd.includes('kitne') || cmd.includes('baaki')
+
+    if (scopeId !== 'global') {
+      const targetTask = tasks.find(item => item.id === scopeId)
+      if (targetTask) {
+        if (isDone || targetTask.status === 'in_progress') {
+          handleStartCompletion(targetTask)
+          const msg = isHindi ? 'सत्यापन कैमरा खोला जा रहा है। कृपया साफ डस्टबिन दिखाएं।' : 'Opening verification camera. Please capture the cleaned bin.'
+          speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+          setVoiceResponse(msg)
+          return
+        }
+        if (isStart || targetTask.status === 'assigned') {
+          handleStartTask(targetTask.id)
+          const msg = isHindi ? `कार्य शुरू किया गया: ${targetTask.bins?.bin_code || ''}` : `Started task for ${targetTask.bins?.bin_code || ''}`
+          speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+          setVoiceResponse(msg)
+          return
+        }
+        if (targetTask.status === 'pending') {
+          handleAcceptTask(targetTask.id)
+          const msg = isHindi ? `कार्य स्वीकार किया गया: ${targetTask.bins?.bin_code || ''}` : `Accepted task for ${targetTask.bins?.bin_code || ''}`
+          speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+          setVoiceResponse(msg)
+          return
+        }
+      }
+    }
 
     if (isNextStop) {
       if (!activeTasks.length) {
@@ -129,19 +155,25 @@ export default function WorkerDashboard() {
       speak(msg, isHindi ? 'hi-IN' : 'en-IN')
       setVoiceResponse(msg)
     } else if (isStart) {
-      const assigned = activeTasks.find(t => t.status === 'assigned')
+      const assigned = activeTasks.find(item => item.status === 'assigned')
+      const pending = activeTasks.find(item => item.status === 'pending')
       if (assigned) {
         handleStartTask(assigned.id)
-        const msg = isHindi ? 'कार्य शुरू कर दिया गया है। कृपया सफाई के बाद फोटो खींचें।' : 'Starting task. Good luck with the cleaning.'
+        const msg = isHindi ? 'सफाई कार्य शुरू कर दिया गया है। ध्यानपूर्वक सफाई करें।' : 'Starting task. Good luck with the cleaning.'
         speak(msg, isHindi ? 'hi-IN' : 'en-IN')
         setVoiceResponse((isHindi ? 'कार्य प्रारंभ: ' : 'Commencing task: ') + (assigned.bins?.bin_code || ''))
+      } else if (pending) {
+        handleAcceptTask(pending.id)
+        const msg = isHindi ? 'नया कार्य स्वीकार कर लिया गया है।' : 'Task accepted and assigned to you.'
+        speak(msg, isHindi ? 'hi-IN' : 'en-IN')
+        setVoiceResponse(msg)
       } else {
         const msg = isHindi ? 'शुरू करने के लिए कोई नया कार्य अभी नहीं है।' : 'No task is currently in assigned status to start.'
         speak(msg, isHindi ? 'hi-IN' : 'en-IN')
         setVoiceResponse(msg)
       }
     } else if (isDone) {
-      const inProgress = activeTasks.find(t => t.status === 'in_progress')
+      const inProgress = activeTasks.find(item => item.status === 'in_progress') || activeTasks[0]
       if (inProgress) {
         handleStartCompletion(inProgress)
         const msg = isHindi ? 'सत्यापन कैमरा खोला जा रहा है। कृपया साफ किया हुआ डस्टबिन दिखाएं।' : 'Opening verification camera. Please show the empty bin clearly.'
@@ -171,11 +203,11 @@ export default function WorkerDashboard() {
     
     if (optimizedRoute && optimizedRoute.sequence.length > 0) {
       list = optimizedRoute.sequence.map(bin => {
-        const task = tasks.find(t => t.id === bin.taskId)
+        const task = tasks.find(item => item.id === bin.taskId)
         return task ? { ...task, displayBin: bin } : null
       }).filter(Boolean)
     } else {
-      list = tasks.filter(t => t.status !== 'completed').map(task => ({
+      list = tasks.filter(item => item.status !== 'completed').map(task => ({
         ...task, displayBin: task.bins
       }))
     }
@@ -216,7 +248,9 @@ export default function WorkerDashboard() {
         .order('created_at', { ascending: true })
       if (error) throw error
       setTasks(data || [])
-    } catch (err) { setError('Failed to load tasks') }
+    } catch {
+      setError('Failed to load tasks')
+    }
   }
 
   const subscribeToTasks = () => {
@@ -227,9 +261,9 @@ export default function WorkerDashboard() {
   }
 
   const calculateOptimizedRoute = () => {
-    const pending = tasks.filter(t => t.status !== 'completed')
+    const pending = tasks.filter(item => item.status !== 'completed')
     if (!pending.length) { setOptimizedRoute(null); return }
-    const bins = pending.map(t => ({ ...t.bins, taskId: t.id, priority: t.priority }))
+    const bins = pending.map(item => ({ ...item.bins, taskId: item.id, priority: item.priority }))
     setOptimizedRoute(optimizeRoute(bins))
   }
 
@@ -239,8 +273,12 @@ export default function WorkerDashboard() {
         .update({ assigned_worker_id: profile.id, status: 'assigned', assigned_at: new Date().toISOString() })
         .eq('id', taskId)
       if (error) throw error
-      fetchTasks(); setSuccess('Task accepted'); setTimeout(() => setSuccess(''), 3000)
-    } catch { setError('Failed to accept task') }
+      fetchTasks()
+      setSuccess(language === 'hi' ? 'कार्य सफलतापूर्वक स्वीकार कर लिया गया' : 'Task accepted')
+      setTimeout(() => setSuccess(''), 3000)
+    } catch {
+      setError(language === 'hi' ? 'कार्य स्वीकार करने में त्रुटि' : 'Failed to accept task')
+    }
   }
 
   const handleStartTask = async (taskId) => {
@@ -248,23 +286,37 @@ export default function WorkerDashboard() {
       const { error } = await supabase.from('cleaning_tasks')
         .update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', taskId)
       if (error) throw error
-      fetchTasks(); setSuccess('Task started'); setTimeout(() => setSuccess(''), 3000)
-    } catch { setError('Failed to start task') }
+      fetchTasks()
+      setSuccess(language === 'hi' ? 'सफाई कार्य शुरू हो चुका है' : 'Task started')
+      setTimeout(() => setSuccess(''), 3000)
+    } catch {
+      setError(language === 'hi' ? 'कार्य शुरू करने में त्रुटि' : 'Failed to start task')
+    }
   }
 
   const handleStartCompletion = (task) => {
-    setSelectedTask(task); setShowCompletionOptions(true); setError('')
+    setSelectedTask(task)
+    setShowCompletionOptions(true)
+    setError('')
   }
 
   const handleCameraCapture = async () => {
-    setShowCompletionOptions(false); setCapturing(true); setError('')
+    setShowCompletionOptions(false)
+    setCapturing(true)
+    setError('')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       if (videoRef.current) { videoRef.current.srcObject = stream; streamRef.current = stream }
-    } catch (err) { setError('Camera failed: ' + err.message); setCapturing(false) }
+    } catch (err) {
+      setError('Camera failed: ' + err.message)
+      setCapturing(false)
+    }
   }
 
-  const handleFileUpload = () => { setShowCompletionOptions(false); fileInputRef.current?.click() }
+  const handleFileUpload = () => {
+    setShowCompletionOptions(false)
+    fileInputRef.current?.click()
+  }
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
@@ -277,19 +329,21 @@ export default function WorkerDashboard() {
   const handleCapture = () => {
     if (!videoRef.current) return
     const canvas = document.createElement('canvas')
-    canvas.width = videoRef.current.videoWidth; canvas.height = videoRef.current.videoHeight
+    canvas.width = videoRef.current.videoWidth
+    canvas.height = videoRef.current.videoHeight
     canvas.getContext('2d').drawImage(videoRef.current, 0, 0)
     canvas.toBlob((blob) => {
       const file = new File([blob], 'completion-proof.jpg', { type: 'image/jpeg' })
       setCapturedImage({ url: URL.createObjectURL(blob), file })
-      streamRef.current?.getTracks().forEach(t => t.stop())
+      streamRef.current?.getTracks().forEach(track => track.stop())
       setCapturing(false)
     }, 'image/jpeg', 0.8)
   }
 
   const handleCompleteTask = async () => {
     if (!capturedImage || !selectedTask) return
-    setCompletingTask(true); setError('')
+    setCompletingTask(true)
+    setError('')
     try {
       setUploadingImage(true)
       let verification = null
@@ -301,13 +355,18 @@ export default function WorkerDashboard() {
         if (!verification.isCleaned) {
           setVerificationResult({
             success: false,
-            title: 'Verification Failed',
-            message: 'The AI detected that the bin is not properly cleaned.',
+            title: t('verificationFailedTitle'),
+            message: t('verificationFailedMsg'),
             details: `Reason: ${verification.notes} (Remaining fill: ${verification.fillPercentage}%)`
           })
-          setCompletingTask(false); setUploadingImage(false); setCapturedImage(null); return
+          setCompletingTask(false)
+          setUploadingImage(false)
+          setCapturedImage(null)
+          return
         }
-      } catch { verification = { isCleaned: true, fillPercentage: 0 } }
+      } catch {
+        verification = { isCleaned: true, fillPercentage: 0 }
+      }
 
       const fileName = `completed-${Date.now()}.jpg`
       const { error: uploadError } = await supabase.storage.from('waste-images').upload(fileName, capturedImage.file)
@@ -318,20 +377,31 @@ export default function WorkerDashboard() {
       const endTime = new Date()
       const durationMinutes = Math.round((endTime - new Date(selectedTask.started_at)) / 60000)
       const { error: completeError } = await supabase.from('cleaning_tasks')
-        .update({ status: 'completed', completed_at: endTime.toISOString(), completion_image_url: publicUrl, actual_duration_minutes: durationMinutes })
+        .update({
+          status: 'completed',
+          completed_at: endTime.toISOString(),
+          completion_image_url: publicUrl,
+          actual_duration_minutes: durationMinutes
+        })
         .eq('id', selectedTask.id)
       if (completeError) throw completeError
 
       await supabase.from('bins')
-        .update({ current_fill_percentage: verification.fillPercentage || 0, current_severity: 'low', last_cleaned_at: endTime.toISOString() })
+        .update({
+          current_fill_percentage: verification.fillPercentage || 0,
+          current_severity: 'low',
+          last_cleaned_at: endTime.toISOString()
+        })
         .eq('id', selectedTask.bin_id)
 
-      setSelectedTask(null); setCapturedImage(null); fetchTasks()
+      setSelectedTask(null)
+      setCapturedImage(null)
+      fetchTasks()
       setVerificationResult({
         success: true,
-        title: 'Verification Successful',
-        message: 'The bin has been verified as clean.',
-        details: 'Great job! The task has been marked as complete.'
+        title: t('verificationSuccessTitle'),
+        message: t('verificationSuccessMsg'),
+        details: t('verificationSuccessDetails')
       })
     } catch (err) {
       setError('Failed to complete: ' + err.message)
@@ -341,13 +411,22 @@ export default function WorkerDashboard() {
   }
 
   const handleCancelCapture = () => {
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    setCapturing(false); setCapturedImage(null); setSelectedTask(null)
+    streamRef.current?.getTracks().forEach(track => track.stop())
+    setCapturing(false)
+    setCapturedImage(null)
+    setSelectedTask(null)
   }
 
   const getStatusBadge = (s) => {
     const map = { pending: 'badge-yellow', assigned: 'badge-slate', in_progress: 'badge-eco' }
     return `badge-editorial ${map[s] || 'badge-slate'}`
+  }
+
+  const getStatusLabel = (s) => {
+    if (s === 'pending') return t('statusPending')
+    if (s === 'assigned') return t('statusAssigned')
+    if (s === 'in_progress') return t('statusInProgress')
+    return s
   }
 
   const getPriorityBadge = (p) => {
@@ -398,14 +477,14 @@ export default function WorkerDashboard() {
             <div className="card-header-editorial border-eco-50/10">
               <h2 className="font-serif text-2xl flex items-center gap-4 tracking-tight">
                 <Navigation className="w-5 h-5 text-eco-300" />
-                Optimized Itinerary
+                {t('optimizedItinerary')}
               </h2>
             </div>
             <div className="grid grid-cols-3 divide-x divide-eco-50/10">
               {[
-                { label: 'Targets', value: optimizedRoute.sequence.length },
-                { label: 'Distance', value: formatDistance(optimizedRoute.totalDistance) },
-                { label: 'Est. Duration', value: formatTime(getTotalEstimatedTime(optimizedRoute.totalDistance, optimizedRoute.sequence.length)) },
+                { label: t('targets'), value: optimizedRoute.sequence.length },
+                { label: t('distance'), value: formatDistance(optimizedRoute.totalDistance) },
+                { label: t('estDuration'), value: formatTime(getTotalEstimatedTime(optimizedRoute.totalDistance, optimizedRoute.sequence.length)) },
               ].map(({ label, value }) => (
                 <div key={label} className="p-8 text-center">
                   <p className="text-[10px] font-bold text-eco-400 uppercase tracking-widest mb-3">{label}</p>
@@ -416,40 +495,74 @@ export default function WorkerDashboard() {
           </div>
         )}
 
-        {/* Part B1: Hands-Free Voice Assistant Controller */}
         <div className="card-editorial mb-12 border-eco-900/10 bg-white">
-          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6 border-b border-eco-900/10">
             <div className="flex items-center gap-4">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
+                activeListeningTaskId === 'global' ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
               }`}>
                 <Mic className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
-                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
+                  <h3 className="font-serif text-lg font-bold text-eco-900">{t('voiceAssistant')}</h3>
+                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">{t('pushToTalk')}</span>
                 </div>
                 <p className="text-xs text-eco-600 font-light mt-0.5">
-                  {voiceResponse || voiceTranscript || (language === 'hi' ? "बोलने के लिए दबाएं: 'अगला स्टॉप', 'काम शुरू करें', 'सफाई हो गई'" : "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'")}
+                  {voiceResponse || voiceTranscript || t('voicePromptDefault')}
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              onMouseDown={startVoiceCommand}
+              onMouseDown={() => startVoiceCommand('global')}
               onMouseUp={stopVoiceCommand}
-              onTouchStart={startVoiceCommand}
+              onTouchStart={() => startVoiceCommand('global')}
               onTouchEnd={stopVoiceCommand}
               className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
-                isListening
+                activeListeningTaskId === 'global'
                   ? 'bg-red-600 text-white ring-4 ring-red-300'
                   : 'bg-eco-900 hover:bg-eco-800 text-white'
               }`}
             >
               <Mic className="w-4 h-4 mr-2 inline" />
-              {isListening ? (language === 'hi' ? 'प्रोसेस करने के लिए छोड़ें' : 'RELEASE TO PROCESS') : (language === 'hi' ? 'बोलने के लिए दबाएं' : 'HOLD TO SPEAK')}
+              {activeListeningTaskId === 'global' ? t('releaseToProcess') : t('holdToSpeak')}
+            </button>
+          </div>
+
+          <div className="px-6 py-3 bg-eco-50 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold text-eco-500 uppercase tracking-widest mr-2 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-eco-600" />
+              {language === 'hi' ? 'त्वरित निर्देश:' : 'Quick Directives:'}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleVoiceAction('next stop', 'global')}
+              className="text-xs bg-white border border-eco-900/10 px-3 py-1 rounded text-eco-800 hover:bg-eco-900 hover:text-white transition-colors"
+            >
+              {t('voiceChipNext')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleVoiceAction('start task', 'global')}
+              className="text-xs bg-white border border-eco-900/10 px-3 py-1 rounded text-eco-800 hover:bg-eco-900 hover:text-white transition-colors"
+            >
+              {t('voiceChipStart')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleVoiceAction('verify cleaning', 'global')}
+              className="text-xs bg-white border border-eco-900/10 px-3 py-1 rounded text-eco-800 hover:bg-eco-900 hover:text-white transition-colors"
+            >
+              {t('voiceChipDone')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleVoiceAction('status', 'global')}
+              className="text-xs bg-white border border-eco-900/10 px-3 py-1 rounded text-eco-800 hover:bg-eco-900 hover:text-white transition-colors"
+            >
+              {t('voiceChipCount')}
             </button>
           </div>
         </div>
@@ -458,66 +571,28 @@ export default function WorkerDashboard() {
           <div className="modal-overlay-editorial">
             <div className="card-editorial w-full max-w-md bg-white">
               <div className="card-header-editorial">
-                <h3 className="font-serif text-2xl text-eco-900">Verification Source</h3>
+                <h3 className="font-serif text-2xl text-eco-900">{t('verificationSource')}</h3>
               </div>
               <div className="card-body-editorial space-y-4">
                 <button onClick={handleCameraCapture} className="btn-editorial btn-editorial-primary w-full">
-                  <Camera className="w-4 h-4 mr-3" /> Camera
+                  <Camera className="w-4 h-4 mr-3" /> {t('camera')}
                 </button>
                 <button onClick={handleFileUpload} className="btn-editorial btn-editorial-secondary w-full">
-                  <Upload className="w-4 h-4 mr-3" /> Upload File
+                  <Upload className="w-4 h-4 mr-3" /> {t('uploadFile')}
                 </button>
                 <button onClick={() => setShowCompletionOptions(false)} className="btn-editorial btn-editorial-ghost w-full mt-4">
-                  Cancel
+                  {t('cancel')}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Part B1: Hands-Free Voice Assistant Controller */}
-        <div className="card-editorial mb-12 border-eco-900/10 bg-white">
-          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
-              }`}>
-                <Mic className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
-                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
-                </div>
-                <p className="text-xs text-eco-600 font-light mt-0.5">
-                  {voiceResponse || voiceTranscript || "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'"}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onMouseDown={startVoiceCommand}
-              onMouseUp={stopVoiceCommand}
-              onTouchStart={startVoiceCommand}
-              onTouchEnd={stopVoiceCommand}
-              className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
-                isListening
-                  ? 'bg-red-600 text-white ring-4 ring-red-300'
-                  : 'bg-eco-900 hover:bg-eco-800 text-white'
-              }`}
-            >
-              <Mic className="w-4 h-4 mr-2 inline" />
-              {isListening ? 'RELEASE TO PROCESS' : 'HOLD TO SPEAK'}
-            </button>
-          </div>
-        </div>
-
         {capturing && (
           <div className="modal-overlay-editorial">
             <div className="card-editorial w-full max-w-2xl max-h-[90vh] flex flex-col bg-white">
               <div className="card-header-editorial shrink-0">
-                <h3 className="font-serif text-2xl text-eco-900">Capture Image</h3>
+                <h3 className="font-serif text-2xl text-eco-900">{t('captureImage')}</h3>
               </div>
               <div className="card-body-editorial p-6 sm:p-8 overflow-y-auto">
                 <div className="relative border border-eco-900/10 bg-eco-50 mb-8 aspect-[4/3] sm:aspect-video flex items-center justify-center max-h-[50vh]">
@@ -525,10 +600,10 @@ export default function WorkerDashboard() {
                 </div>
                 <div className="flex gap-4">
                   <button onClick={handleCapture} className="btn-editorial btn-editorial-primary flex-1">
-                    Capture
+                    {t('captureImage')}
                   </button>
                   <button onClick={handleCancelCapture} className="btn-editorial btn-editorial-secondary flex-1">
-                    Cancel
+                    {t('cancel')}
                   </button>
                 </div>
               </div>
@@ -536,49 +611,11 @@ export default function WorkerDashboard() {
           </div>
         )}
 
-        {/* Part B1: Hands-Free Voice Assistant Controller */}
-        <div className="card-editorial mb-12 border-eco-900/10 bg-white">
-          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
-              }`}>
-                <Mic className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
-                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
-                </div>
-                <p className="text-xs text-eco-600 font-light mt-0.5">
-                  {voiceResponse || voiceTranscript || "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'"}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onMouseDown={startVoiceCommand}
-              onMouseUp={stopVoiceCommand}
-              onTouchStart={startVoiceCommand}
-              onTouchEnd={stopVoiceCommand}
-              className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
-                isListening
-                  ? 'bg-red-600 text-white ring-4 ring-red-300'
-                  : 'bg-eco-900 hover:bg-eco-800 text-white'
-              }`}
-            >
-              <Mic className="w-4 h-4 mr-2 inline" />
-              {isListening ? 'RELEASE TO PROCESS' : 'HOLD TO SPEAK'}
-            </button>
-          </div>
-        </div>
-
         {capturedImage && !capturing && (
           <div className="modal-overlay-editorial">
             <div className="card-editorial w-full max-w-2xl max-h-[90vh] flex flex-col bg-white">
               <div className="card-header-editorial shrink-0">
-                <h3 className="font-serif text-2xl text-eco-900">Review Documentation</h3>
+                <h3 className="font-serif text-2xl text-eco-900">{t('reviewDocumentation')}</h3>
               </div>
               <div className="card-body-editorial p-6 sm:p-8 overflow-y-auto">
                 <div className="border border-eco-900/10 mb-8 flex justify-center bg-eco-50 p-4">
@@ -588,16 +625,16 @@ export default function WorkerDashboard() {
                   <div className="flex flex-col items-center gap-4 py-8 text-eco-900 border border-eco-900/10 mb-8">
                     <Loader className="w-5 h-5 animate-spin" />
                     <span className="font-serif text-xl">
-                      {uploadingImage ? 'Verifying cleanliness standards...' : 'Finalizing record...'}
+                      {uploadingImage ? t('verifyingCleanliness') : 'Finalizing record...'}
                     </span>
                   </div>
                 )}
                 <div className="flex gap-4">
                   <button onClick={handleCompleteTask} disabled={completingTask} className="btn-editorial btn-editorial-primary flex-1">
-                    Submit Record
+                    {t('submitRecord')}
                   </button>
                   <button onClick={() => setCapturedImage(null)} disabled={completingTask} className="btn-editorial btn-editorial-secondary flex-1">
-                    Retake Image
+                    {t('retakeImage')}
                   </button>
                 </div>
               </div>
@@ -605,77 +642,39 @@ export default function WorkerDashboard() {
           </div>
         )}
 
-        {/* Part B1: Hands-Free Voice Assistant Controller */}
-        <div className="card-editorial mb-12 border-eco-900/10 bg-white">
-          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
-              }`}>
-                <Mic className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
-                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
-                </div>
-                <p className="text-xs text-eco-600 font-light mt-0.5">
-                  {voiceResponse || voiceTranscript || "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'"}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onMouseDown={startVoiceCommand}
-              onMouseUp={stopVoiceCommand}
-              onTouchStart={startVoiceCommand}
-              onTouchEnd={stopVoiceCommand}
-              className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
-                isListening
-                  ? 'bg-red-600 text-white ring-4 ring-red-300'
-                  : 'bg-eco-900 hover:bg-eco-800 text-white'
-              }`}
-            >
-              <Mic className="w-4 h-4 mr-2 inline" />
-              {isListening ? 'RELEASE TO PROCESS' : 'HOLD TO SPEAK'}
-            </button>
-          </div>
-        </div>
-
         <div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
-            <h2 className="font-serif text-3xl text-eco-900 tracking-tight">Assigned Tasks</h2>
+            <h2 className="font-serif text-3xl text-eco-900 tracking-tight">{t('assignedTasks')}</h2>
             <div className="flex gap-4">
               <select 
                 value={statusFilter} 
                 onChange={e => setStatusFilter(e.target.value)}
-                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+                className="input-editorial py-2 text-xs w-36 border-eco-900/20 bg-transparent"
               >
-                <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="assigned">Assigned</option>
-                <option value="in_progress">In Progress</option>
+                <option value="all">{t('allStatuses')}</option>
+                <option value="pending">{t('statusPending')}</option>
+                <option value="assigned">{t('statusAssigned')}</option>
+                <option value="in_progress">{t('statusInProgress')}</option>
               </select>
               <select 
                 value={priorityFilter} 
                 onChange={e => setPriorityFilter(e.target.value)}
-                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+                className="input-editorial py-2 text-xs w-36 border-eco-900/20 bg-transparent"
               >
-                <option value="all">All Priorities</option>
-                <option value="1">Priority 1</option>
-                <option value="2">Priority 2</option>
-                <option value="3">Priority 3</option>
+                <option value="all">{t('allPriorities')}</option>
+                <option value="1">{t('priority1')}</option>
+                <option value="2">{t('priority2')}</option>
+                <option value="3">{t('priority3')}</option>
               </select>
               <select 
                 value={sortBy} 
                 onChange={e => setSortBy(e.target.value)}
-                className="input-editorial py-2 text-xs w-32 border-eco-900/20 bg-transparent"
+                className="input-editorial py-2 text-xs w-36 border-eco-900/20 bg-transparent"
               >
-                <option value="optimized">Optimized Route</option>
-                <option value="priority">Highest Priority</option>
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
+                <option value="optimized">{t('sortOptimized')}</option>
+                <option value="priority">{t('sortPriority')}</option>
+                <option value="newest">{t('sortNewest')}</option>
+                <option value="oldest">{t('sortOldest')}</option>
               </select>
             </div>
           </div>
@@ -683,19 +682,20 @@ export default function WorkerDashboard() {
           {displayedTasks.length === 0 ? (
             <div className="card-editorial">
               <div className="card-body-editorial text-center py-24">
-                <p className="font-serif text-3xl text-eco-400 italic mb-2">Queue clear.</p>
-                <p className="text-[10px] font-bold tracking-widest uppercase text-eco-500">No pending operations.</p>
+                <p className="font-serif text-3xl text-eco-400 italic mb-2">{t('queueClear')}</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-eco-500">{t('noPendingOps')}</p>
               </div>
             </div>
           ) : (
             <div className="space-y-6">
               {displayedTasks.map((task, index) => {
-                const bin = task.displayBin
+                const bin = task.displayBin || task.bins
+                const isThisTaskListening = activeListeningTaskId === task.id
 
                 return (
                   <div key={task.id} className="card-editorial flex flex-col sm:flex-row group">
                     <div className="bg-eco-50 sm:w-32 p-6 sm:p-0 flex flex-col items-center justify-center border-b sm:border-b-0 sm:border-r border-eco-900/10">
-                      <span className="text-[10px] font-bold text-eco-400 uppercase tracking-[0.2em] mb-2">Stop</span>
+                      <span className="text-[10px] font-bold text-eco-400 uppercase tracking-[0.2em] mb-2">{t('stopNumber')}</span>
                       <span className="font-serif text-5xl text-eco-900">{index + 1}</span>
                     </div>
 
@@ -703,18 +703,18 @@ export default function WorkerDashboard() {
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-8">
                         <div>
                           <div className="flex items-center gap-4 flex-wrap mb-3">
-                            <h3 className="font-serif text-3xl text-eco-900">{bin.bin_code}</h3>
+                            <h3 className="font-serif text-3xl text-eco-900">{bin?.bin_code}</h3>
                             <span className={getPriorityBadge(task.priority)}>
-                              Priority {task.priority}
+                              {t('priority')} {task.priority}
                             </span>
-                            {task.is_predicted && <span className="badge-editorial badge-slate">Scheduled</span>}
+                            {task.is_predicted && <span className="badge-editorial badge-slate">{t('scheduled')}</span>}
                           </div>
 
                           <div className="text-[10px] font-bold tracking-[0.2em] text-eco-600 uppercase flex flex-col gap-2">
-                            <span className="flex items-center gap-2"><MapPin className="w-3 h-3" /> {bin.location_name}</span>
+                            <span className="flex items-center gap-2"><MapPin className="w-3 h-3" /> {bin?.location_name}</span>
                             <div className="flex items-center gap-3 text-eco-500">
-                              <span>Fill: {bin.current_fill_percentage?.toFixed(0)}%</span>
-                              {bin.distance && (
+                              <span>{t('fillCapacity')}: {bin?.current_fill_percentage?.toFixed(0)}%</span>
+                              {bin?.distance && (
                                 <>
                                   <span>|</span>
                                   <span>{formatDistance(bin.distance)}</span>
@@ -726,41 +726,59 @@ export default function WorkerDashboard() {
 
                         <div className="flex flex-col items-start sm:items-end gap-2">
                           <span className={getStatusBadge(task.status)}>
-                            {task.status.replace('_', ' ')}
+                            {getStatusLabel(task.status)}
                           </span>
                           <div className="text-[10px] font-mono text-eco-400 mt-1 sm:text-right">
                             <div className="flex items-center sm:justify-end gap-1 mb-1">
                               <Clock className="w-3 h-3" />
-                              <span>Reported: {new Date(task.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span>{t('reportedAt')}: {new Date(task.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
-                            <span>{new Date(task.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            <span>{new Date(task.created_at).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                           </div>
                         </div>
                       </div>
 
                       {task.notes && (
                         <div className="mb-8 border-l border-eco-900/20 pl-4 py-2">
-                          <span className="text-[10px] font-bold text-eco-900 uppercase tracking-widest block mb-1">Directives</span>
+                          <span className="text-[10px] font-bold text-eco-900 uppercase tracking-widest block mb-1">{t('directives')}</span>
                           <span className="text-sm font-light text-eco-700 italic">{task.notes}</span>
                         </div>
                       )}
 
-                      <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-eco-900/10">
-                        {task.status === 'pending' && !task.assigned_worker_id && (
-                          <button onClick={() => handleAcceptTask(task.id)} className="btn-editorial btn-editorial-secondary w-full sm:w-auto">
-                            Accept Assignment
-                          </button>
-                        )}
-                        {task.status === 'assigned' && task.assigned_worker_id === profile.id && (
-                          <button onClick={() => handleStartTask(task.id)} className="btn-editorial btn-editorial-primary w-full sm:w-auto">
-                            Commence Work
-                          </button>
-                        )}
-                        {task.status === 'in_progress' && (
-                          <button onClick={() => handleStartCompletion(task)} className="btn-editorial btn-editorial-primary w-full sm:w-auto">
-                            Finalize Task
-                          </button>
-                        )}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-6 border-t border-eco-900/10">
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          {task.status === 'pending' && !task.assigned_worker_id && (
+                            <button onClick={() => handleAcceptTask(task.id)} className="btn-editorial btn-editorial-secondary w-full sm:w-auto">
+                              {t('acceptAssignment')}
+                            </button>
+                          )}
+                          {task.status === 'assigned' && task.assigned_worker_id === profile.id && (
+                            <button onClick={() => handleStartTask(task.id)} className="btn-editorial btn-editorial-primary w-full sm:w-auto">
+                              {t('commenceWork')}
+                            </button>
+                          )}
+                          {task.status === 'in_progress' && (
+                            <button onClick={() => handleStartCompletion(task)} className="btn-editorial btn-editorial-primary w-full sm:w-auto">
+                              {t('finalizeTask')}
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onMouseDown={() => startVoiceCommand(task.id)}
+                          onMouseUp={stopVoiceCommand}
+                          onTouchStart={() => startVoiceCommand(task.id)}
+                          onTouchEnd={stopVoiceCommand}
+                          className={`flex items-center justify-center gap-2 px-3 py-2 text-[10px] tracking-wider uppercase font-bold rounded transition-all select-none border ${
+                            isThisTaskListening
+                              ? 'bg-red-600 text-white border-red-600 ring-2 ring-red-300 animate-pulse'
+                              : 'bg-eco-50 text-eco-800 border-eco-900/10 hover:bg-eco-100'
+                          }`}
+                        >
+                          <Mic className="w-3.5 h-3.5" />
+                          <span>{isThisTaskListening ? t('voiceListening') : (language === 'hi' ? 'इस स्टॉप के लिए बोलें' : 'Voice Action')}</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -784,50 +802,12 @@ export default function WorkerDashboard() {
                   onClick={() => setVerificationResult(null)}
                   className={`btn-editorial w-full ${verificationResult.success ? 'btn-editorial-primary' : 'bg-red-600 text-white hover:bg-red-700'}`}
                 >
-                  {verificationResult.success ? 'Continue to Next Task' : 'I will re-clean it'}
+                  {verificationResult.success ? t('continueNextTask') : t('recleanBtn')}
                 </button>
               </div>
             </div>
           </div>
         )}
-
-        {/* Part B1: Hands-Free Voice Assistant Controller */}
-        <div className="card-editorial mb-12 border-eco-900/10 bg-white">
-          <div className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                isListening ? 'bg-red-600 text-white animate-pulse ring-8 ring-red-500/20' : 'bg-eco-100 text-eco-900'
-              }`}>
-                <Mic className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-serif text-lg font-bold text-eco-900">Hands-Free Voice Assistant</h3>
-                  <span className="text-[10px] bg-eco-900 text-white px-2 py-0.5 rounded font-mono">PUSH-TO-TALK</span>
-                </div>
-                <p className="text-xs text-eco-600 font-light mt-0.5">
-                  {voiceResponse || voiceTranscript || "Hold button to speak: 'Next stop', 'Start task', 'Verify cleaning'"}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onMouseDown={startVoiceCommand}
-              onMouseUp={stopVoiceCommand}
-              onTouchStart={startVoiceCommand}
-              onTouchEnd={stopVoiceCommand}
-              className={`btn-editorial py-4 px-8 rounded text-xs tracking-widest font-bold transition-all select-none ${
-                isListening
-                  ? 'bg-red-600 text-white ring-4 ring-red-300'
-                  : 'bg-eco-900 hover:bg-eco-800 text-white'
-              }`}
-            >
-              <Mic className="w-4 h-4 mr-2 inline" />
-              {isListening ? 'RELEASE TO PROCESS' : 'HOLD TO SPEAK'}
-            </button>
-          </div>
-        </div>
 
       </div>
     </div>
