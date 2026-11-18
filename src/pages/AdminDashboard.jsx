@@ -154,6 +154,48 @@ export default function AdminDashboard() {
       peakHours: '1:00 PM - 3:00 PM',
       nearestExistingDist: 58,
       reason: language === 'hi' ? 'लैब क्षेत्र में चाय/कॉफ़ी कप निष्कासन की आवश्यकता।' : 'Lab area beverage cup disposal demand. Walking radius uncovered by existing CS bins.'
+    },
+    {
+      id: 'SUGG-CIVIL-01',
+      binCode: 'PROP-CIVIL-ALLEY',
+      locationName: 'Civil & Textile Department Passage',
+      department: 'Civil',
+      latitude: 19.0222,
+      longitude: 72.8549,
+      recommendedCount: 1,
+      capacityLiters: 120,
+      demandScore: 65,
+      peakHours: '11:00 AM - 1:00 PM',
+      nearestExistingDist: 78,
+      reason: language === 'hi' ? 'सर्वेक्षण और कपड़ा प्रयोगशालाओं के बीच लगातार पैकेजिंग कचरे की मांग।' : 'Corridor between surveying labs and textile machinery wing needs additional waste coverage.'
+    },
+    {
+      id: 'SUGG-SPORTS-01',
+      binCode: 'PROP-SPORTS-STAND',
+      locationName: 'Sports Pavilion & Cricket Stand',
+      department: 'Gymkhana',
+      latitude: 19.0211,
+      longitude: 72.8560,
+      recommendedCount: 2,
+      capacityLiters: 150,
+      demandScore: 78,
+      peakHours: '5:00 PM - 7:30 PM',
+      nearestExistingDist: 85,
+      reason: language === 'hi' ? 'शाम के खेल सत्रों के दौरान हाइड्रेशन और स्पोर्ट्स ड्रिंक की बोतलों की अधिकता।' : 'High hydration bottle accumulation during evening tournament matches and gymkhana workouts.'
+    },
+    {
+      id: 'SUGG-GATE-01',
+      binCode: 'PROP-GATE-CORNER',
+      locationName: 'Gate 1 Bus Stop & Rickshaw Stand',
+      department: 'Security & Gate',
+      latitude: 19.0225,
+      longitude: 72.8574,
+      recommendedCount: 1,
+      capacityLiters: 100,
+      demandScore: 71,
+      peakHours: '8:30 AM - 10:30 AM',
+      nearestExistingDist: 69,
+      reason: language === 'hi' ? 'मुख्य द्वार पर सुबह आने वाले छात्रों द्वारा डिस्पोजेबल कप और नाश्ते के रैपर।' : 'Transit bottleneck at H.R. Mahajani Marg entrance where students discard morning transit items.'
     }
   ]
 
@@ -408,7 +450,7 @@ export default function AdminDashboard() {
                 <input
                   type="range"
                   min="1"
-                  max="5"
+                  max="8"
                   value={whatIfBudget}
                   onChange={(e) => setWhatIfBudget(parseInt(e.target.value))}
                   className="w-24 accent-indigo-400"
@@ -464,9 +506,9 @@ export default function AdminDashboard() {
               initialViewState={{
                 longitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LNG || 72.8561),
                 latitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LAT || 19.0222),
-                zoom: 18,
-                pitch: 60,
-                bearing: -20
+                zoom: 16.9,
+                pitch: 45,
+                bearing: -10
               }}
               mapStyle={mapStyle}
               style={{ width: '100%', height: '100%' }}
