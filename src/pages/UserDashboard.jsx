@@ -5,11 +5,13 @@ import LanguageToggle from '../components/LanguageToggle'
 import { analyzeWasteImage } from '../lib/aiService'
 import { findNearestBin } from '../lib/routeOptimizer'
 import {
-  fetchCampusBins, fetchCampusReports, submitWasteReport, submitPinDemandRequest
+  fetchCampusBins, fetchCampusReports, submitWasteReport, submitPinDemandRequest,
+  fetchStudentGamification, fetchCampusLeaderboard
 } from '../lib/dataService'
 import {
   Camera, Loader, CheckCircle, Upload,
-  MapPin, Leaf, Sparkles, AlertCircle
+  MapPin, Leaf, Sparkles, AlertCircle,
+  Trophy, Coins, Flame, Award, Medal, Crown
 } from 'lucide-react'
 
 export default function UserDashboard() {
@@ -32,6 +34,12 @@ export default function UserDashboard() {
   const [binRequestNotes, setBinRequestNotes] = useState('')
   const [submittingRequest, setSubmittingRequest] = useState(false)
 
+  const [gamification, setGamification] = useState(null)
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [leaderboardTab, setLeaderboardTab] = useState('students')
+  const [leaderboardData, setLeaderboardData] = useState({ students: [], departments: [] })
+  const [recentReward, setRecentReward] = useState(null)
+
   const displayedReports = useMemo(() => {
     let list = [...myReports]
     list = list.filter(report => severityFilter === 'all' || report.severity === severityFilter)
@@ -53,7 +61,17 @@ export default function UserDashboard() {
   const streamRef = useRef(null)
   const fileInputRef = useRef(null)
 
-  useEffect(() => { fetchMyReports() }, [profile?.id])
+  useEffect(() => {
+    fetchMyReports()
+    refreshGamification()
+  }, [profile?.id, profile?.full_name])
+
+  const refreshGamification = () => {
+    const stats = fetchStudentGamification(profile?.id, profile?.full_name, profile?.department)
+    setGamification(stats)
+    const board = fetchCampusLeaderboard()
+    setLeaderboardData(board)
+  }
 
   const getUserLocation = () => new Promise((resolve) => {
     const campusCenter = {
@@ -107,11 +125,15 @@ export default function UserDashboard() {
     setError('')
     try {
       const loc = location || await getUserLocation()
-      await submitPinDemandRequest({
+      const pinRes = await submitPinDemandRequest({
         location: loc,
         notes: binRequestNotes,
         reporter: profile
       })
+      if (pinRes?.gamification) {
+        setRecentReward(pinRes.gamification)
+        refreshGamification()
+      }
       setShowBinRequestModal(false)
       setBinRequestNotes('')
       setSuccess(language === 'hi' ? 'स्थान पिन दर्ज हो गया! सुविधा प्रबंधकों को आपका अनुरोध भेज दिया गया है।' : 'Demand signal recorded! Facility administrators have received your pin request.')
@@ -183,7 +205,7 @@ export default function UserDashboard() {
       const bins = await fetchCampusBins()
       const targetBin = nearestBin || bins[0]
 
-      await submitWasteReport({
+      const reportRes = await submitWasteReport({
         bin: targetBin,
         reporter: profile,
         file: imageFile,
@@ -194,6 +216,11 @@ export default function UserDashboard() {
         observations: result.observations || result.notes || '',
         location: location || { latitude: targetBin.latitude, longitude: targetBin.longitude }
       })
+
+      if (reportRes?.gamification) {
+        setRecentReward(reportRes.gamification)
+        refreshGamification()
+      }
 
       if (result.fillPercentage < 30) {
         setSuccess(language === 'hi'
@@ -248,6 +275,17 @@ export default function UserDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {gamification && (
+              <button
+                onClick={() => setShowLeaderboard(true)}
+                className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1 rounded text-xs font-bold text-amber-900 transition-all hover:scale-105"
+                title={t('viewLeaderboard')}
+              >
+                <Coins className="w-3.5 h-3.5 text-amber-600" />
+                <span className="font-mono">{gamification.points}</span>
+                <span className="text-[10px] uppercase font-bold text-amber-700">{t('ecoCoins')}</span>
+              </button>
+            )}
             <LanguageToggle />
             <button onClick={signOut} className="btn-editorial-ghost">
               {t('signOut')}
@@ -258,6 +296,246 @@ export default function UserDashboard() {
 
       <div className="dashboard-container max-w-4xl">
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+
+        {recentReward && (
+          <div className="mb-8 p-4 bg-emerald-50 border border-emerald-500/30 rounded flex items-center justify-between shadow-sm animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold">
+                <Coins className="w-5 h-5 text-amber-300 animate-pulse" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+                  <span>{t('pointsEarnedNotice', recentReward.pointsAwarded)}</span>
+                </p>
+                <p className="text-xs text-emerald-700">
+                  {language === 'hi'
+                    ? `नया संतुलन: ${recentReward.newBalance} इको कॉइन्स · परिसर रैंक #${recentReward.rank}`
+                    : `New Balance: ${recentReward.newBalance} EcoCoins · Campus Rank #${recentReward.rank}`}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowLeaderboard(true)}
+              className="btn-editorial bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3 py-1.5 flex items-center gap-1 border-transparent"
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-300" />
+              <span>{t('viewLeaderboard')}</span>
+            </button>
+          </div>
+        )}
+
+        {gamification && !capturing && !capturedImage && (
+          <div className="card-editorial mb-8 bg-white overflow-hidden border-eco-900/10 shadow-sm">
+            <div className="p-4 sm:p-6 bg-gradient-to-r from-eco-900 via-eco-800 to-[#1e4620] text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-amber-400/20 border border-amber-300/40 flex items-center justify-center text-amber-300">
+                  <Coins className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-emerald-300">
+                      {t('gamificationTitle')}
+                    </span>
+                    <span className="text-white/30">|</span>
+                    <span className="text-[10px] font-mono text-amber-300 uppercase font-bold">
+                      {t('levelLabel')} {gamification.level}: {gamification.title}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="font-serif text-3xl sm:text-4xl font-bold text-white tracking-tight">
+                      {gamification.points}
+                    </span>
+                    <span className="text-xs font-bold tracking-widest text-amber-300 uppercase">
+                      {t('ecoCoins')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                <div className="flex items-center gap-2 bg-white/10 px-3 py-2 rounded border border-white/10 text-xs">
+                  <Flame className="w-4 h-4 text-orange-400" />
+                  <span className="font-mono font-bold text-white">{t('streakDays', gamification.streak_days || 1)}</span>
+                </div>
+
+                <div className="flex items-center gap-2 bg-white/10 px-3 py-2 rounded border border-white/10 text-xs">
+                  <Medal className="w-4 h-4 text-amber-300" />
+                  <span className="font-mono font-bold text-white">#{gamification.rank} {t('rankLabel')}</span>
+                </div>
+
+                <button
+                  onClick={() => setShowLeaderboard(true)}
+                  className="btn-editorial bg-amber-400 hover:bg-amber-300 text-eco-900 font-bold px-4 py-2 text-xs flex items-center gap-2 border-transparent transition-transform hover:scale-105"
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span>{t('viewLeaderboard')}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="px-6 py-2.5 bg-eco-50/70 border-t border-eco-900/10 flex items-center justify-between text-[11px] text-eco-700">
+              <div className="flex items-center gap-2 w-full max-w-md">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-eco-500 whitespace-nowrap">
+                  {t('levelLabel')} {gamification.level} → {gamification.level + 1}
+                </span>
+                <div className="w-full bg-eco-200 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${gamification.progressPercent}%` }}
+                  />
+                </div>
+                <span className="font-mono text-[10px] text-eco-600 font-bold whitespace-nowrap">
+                  {gamification.progressPercent}%
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-eco-500 hidden sm:inline">
+                {t('nextLevelAt', Math.max(0, gamification.nextTarget - gamification.points))}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {showLeaderboard && (
+          <div className="modal-overlay-editorial z-50">
+            <div className="card-editorial w-full max-w-2xl bg-white max-h-[90vh] flex flex-col shadow-2xl">
+              <div className="card-header-editorial bg-eco-900 text-white border-none p-6 flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Trophy className="w-6 h-6 text-amber-400" />
+                    <h3 className="font-serif text-2xl text-white tracking-tight">{t('leaderboardModalTitle')}</h3>
+                  </div>
+                  <p className="text-xs text-eco-200">{t('leaderboardModalSub')}</p>
+                </div>
+                <button
+                  onClick={() => setShowLeaderboard(false)}
+                  className="text-eco-300 hover:text-white text-sm font-bold uppercase tracking-wider p-2"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex border-b border-eco-900/10 px-6 pt-3 bg-eco-50 gap-4">
+                <button
+                  onClick={() => setLeaderboardTab('students')}
+                  className={`pb-3 text-xs font-bold tracking-wider uppercase border-b-2 transition-colors ${
+                    leaderboardTab === 'students'
+                      ? 'border-eco-900 text-eco-900'
+                      : 'border-transparent text-eco-500 hover:text-eco-900'
+                  }`}
+                >
+                  {t('tabStudents')}
+                </button>
+                <button
+                  onClick={() => setLeaderboardTab('departments')}
+                  className={`pb-3 text-xs font-bold tracking-wider uppercase border-b-2 transition-colors ${
+                    leaderboardTab === 'departments'
+                      ? 'border-eco-900 text-eco-900'
+                      : 'border-transparent text-eco-500 hover:text-eco-900'
+                  }`}
+                >
+                  {t('tabDepartments')}
+                </button>
+              </div>
+
+              <div className="overflow-y-auto p-6 space-y-4 flex-1">
+                {leaderboardTab === 'students' ? (
+                  <div className="divide-y divide-eco-900/10 border border-eco-900/10 rounded">
+                    {leaderboardData.students.map((st, idx) => {
+                      const isCurrent = st.id === profile?.id || st.full_name === profile?.full_name
+                      return (
+                        <div
+                          key={st.id || idx}
+                          className={`p-4 flex items-center justify-between gap-4 transition-colors ${
+                            isCurrent ? 'bg-emerald-50 border-l-4 border-l-emerald-600' : idx % 2 === 0 ? 'bg-white' : 'bg-eco-50/30'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-8 flex justify-center">
+                              {idx === 0 ? (
+                                <Crown className="w-6 h-6 text-amber-500 fill-amber-400" />
+                              ) : idx === 1 ? (
+                                <Medal className="w-5 h-5 text-slate-400" />
+                              ) : idx === 2 ? (
+                                <Medal className="w-5 h-5 text-amber-700" />
+                              ) : (
+                                <span className="font-mono text-xs font-bold text-eco-400">#{idx + 1}</span>
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className={`font-serif text-base font-bold ${isCurrent ? 'text-emerald-950' : 'text-eco-900'}`}>
+                                  {st.full_name}
+                                </span>
+                                {isCurrent && (
+                                  <span className="text-[9px] font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded tracking-widest uppercase">
+                                    {t('youBadge')}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] uppercase tracking-wider text-eco-500 font-medium">
+                                {st.department} · {st.badge || t('levelLabel') + ' ' + st.level}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-6 text-right">
+                            <div className="hidden sm:block">
+                              <span className="text-[10px] text-eco-400 font-bold uppercase block">{t('tableReports')}</span>
+                              <span className="font-mono text-xs font-bold text-eco-800">{st.reports_count}</span>
+                            </div>
+                            <div className="hidden sm:block">
+                              <span className="text-[10px] text-eco-400 font-bold uppercase block">{t('tableStreak')}</span>
+                              <span className="font-mono text-xs font-bold text-orange-600">🔥 {st.streak_days || 1}d</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-amber-600 font-bold uppercase block">{t('tablePoints')}</span>
+                              <span className="font-mono text-base font-bold text-eco-900">{st.points}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-eco-900/10 border border-eco-900/10 rounded">
+                    {leaderboardData.departments.map((dept, idx) => (
+                      <div key={dept.department} className="p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <span className="font-mono text-sm font-bold text-eco-400 w-6">#{idx + 1}</span>
+                          <div>
+                            <span className="font-serif text-base font-bold text-eco-900">{dept.department}</span>
+                            <p className="text-[10px] uppercase tracking-wider text-eco-500">
+                              {dept.studentCount} {language === 'hi' ? 'सक्रिय छात्र' : 'active students'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6 text-right">
+                          <div>
+                            <span className="text-[10px] text-eco-400 font-bold uppercase block">{t('tableReports')}</span>
+                            <span className="font-mono text-xs font-bold text-eco-800">{dept.totalReports}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-amber-600 font-bold uppercase block">{t('tablePoints')}</span>
+                            <span className="font-mono text-base font-bold text-eco-900">{dept.totalPoints}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 bg-eco-50 border-t border-eco-900/10 flex justify-end">
+                <button
+                  onClick={() => setShowLeaderboard(false)}
+                  className="btn-editorial btn-editorial-primary px-6 py-2 text-xs"
+                >
+                  {t('closeBtn')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="alert-error mb-10">
