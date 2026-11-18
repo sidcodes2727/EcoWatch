@@ -2,9 +2,11 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LanguageToggle from '../components/LanguageToggle'
-import { supabase } from '../lib/supabase'
 import { analyzeWasteImage } from '../lib/aiService'
 import { findNearestBin } from '../lib/routeOptimizer'
+import {
+  fetchCampusBins, fetchCampusReports, submitWasteReport, submitPinDemandRequest
+} from '../lib/dataService'
 import {
   Camera, Loader, CheckCircle, Upload,
   MapPin, Leaf, Sparkles, AlertCircle
@@ -51,26 +53,65 @@ export default function UserDashboard() {
   const streamRef = useRef(null)
   const fileInputRef = useRef(null)
 
-  useEffect(() => { fetchMyReports() }, [])
+  useEffect(() => { fetchMyReports() }, [profile?.id])
+
+  const getUserLocation = () => new Promise((resolve) => {
+    const campusCenter = {
+      latitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LAT || 19.0222),
+      longitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LNG || 72.8561),
+      accuracy: null,
+      isFallback: true
+    }
+    if (!navigator.geolocation) return resolve(campusCenter)
+    const timer = setTimeout(() => resolve(campusCenter), 1500)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timer)
+        resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy })
+      },
+      () => {
+        clearTimeout(timer)
+        resolve(campusCenter)
+      },
+      { enableHighAccuracy: false, timeout: 1500, maximumAge: 60000 }
+    )
+  })
+
+  const setupLocationAndBin = async () => {
+    try {
+      const userLoc = await getUserLocation()
+      setLocation(userLoc)
+      const bins = await fetchCampusBins()
+      const nearest = findNearestBin(userLoc, bins) || bins[0]
+      setNearestBin(nearest)
+      setError('')
+      return { userLoc, nearest }
+    } catch {
+      const fallbackLoc = {
+        latitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LAT || 19.0222),
+        longitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LNG || 72.8561),
+        accuracy: null,
+        isFallback: true
+      }
+      setLocation(fallbackLoc)
+      const bins = await fetchCampusBins()
+      const nearest = bins[0]
+      setNearestBin(nearest)
+      setError('')
+      return { userLoc: fallbackLoc, nearest }
+    }
+  }
 
   const handleBinRequestSubmit = async () => {
     setSubmittingRequest(true)
     setError('')
     try {
       const loc = location || await getUserLocation()
-      const { error: reqError } = await supabase.from('waste_reports').insert({
-        bin_id: nearestBin?.id || null,
-        reporter_id: profile.id,
-        image_url: 'https://tvtbgtdntxkhdxjtltmc.supabase.co/storage/v1/object/public/waste-images/request-bin-pin.png',
-        fill_percentage: 100,
-        severity: 'high',
-        waste_type: 'New Bin Demand Signal',
-        ai_confidence: 90,
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        notes: '[REQUEST_BIN_HERE] ' + (binRequestNotes || (language === 'hi' ? 'नागरिक द्वारा इस स्थान पर डस्टबिन की मांग।' : 'Citizen requested a bin at this location due to lack of disposal options.'))
+      await submitPinDemandRequest({
+        location: loc,
+        notes: binRequestNotes,
+        reporter: profile
       })
-      if (reqError) throw reqError
       setShowBinRequestModal(false)
       setBinRequestNotes('')
       setSuccess(language === 'hi' ? 'स्थान पिन दर्ज हो गया! सुविधा प्रबंधकों को आपका अनुरोध भेज दिया गया है।' : 'Demand signal recorded! Facility administrators have received your pin request.')
@@ -84,45 +125,11 @@ export default function UserDashboard() {
 
   const fetchMyReports = async () => {
     try {
-      const { data, error } = await supabase
-        .from('waste_reports')
-        .select('*, bins(bin_code, location_name)')
-        .eq('reporter_id', profile.id)
-        .order('created_at', { ascending: false })
-        .limit(5)
-      if (error) throw error
+      const data = await fetchCampusReports(profile?.id)
       setMyReports(data || [])
-    } catch (err) { console.error('Error fetching reports:', err) }
-  }
-
-  const getUserLocation = () => new Promise((resolve, reject) => {
-    if (!navigator.geolocation) return reject(new Error('Geolocation not supported'))
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-      () => resolve({
-        latitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LAT || 19.0222),
-        longitude: parseFloat(import.meta.env.VITE_CAMPUS_CENTER_LNG || 72.8561),
-        accuracy: null, isFallback: true
-      }),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    )
-  })
-
-  const setupLocationAndBin = async () => {
-    setError(language === 'hi' ? 'स्थान खोजा जा रहा है...' : 'Getting location...')
-    const userLocation = await getUserLocation()
-    setLocation(userLocation)
-    if (userLocation.isFallback) setError(language === 'hi' ? 'परिसर केंद्र उपयोग हो रहा है (GPS बंद है)' : 'Using campus center (GPS off)')
-    else setError('')
-
-    const { data: bins, error: binsError } = await supabase.from('bins').select('*').eq('is_active', true)
-    if (binsError) throw binsError
-    if (!bins?.length) throw new Error(language === 'hi' ? 'कोई डस्टबिन उपलब्ध नहीं है' : 'No bins available')
-
-    const nearest = findNearestBin(userLocation, bins)
-    setNearestBin(nearest)
-    setError('')
-    return { userLocation, nearest }
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const handleCameraCapture = async () => {
@@ -132,22 +139,22 @@ export default function UserDashboard() {
       setCapturing(true)
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       if (videoRef.current) { videoRef.current.srcObject = stream; streamRef.current = stream }
-    } catch (err) { setError((language === 'hi' ? 'कैमरा विफल: ' : 'Camera failed: ') + err.message) }
+    } catch (err) {
+      setError((language === 'hi' ? 'कैमरा विफल: ' : 'Camera failed: ') + err.message)
+    }
   }
 
   const handleFileUpload = async () => {
     setShowOptions(false)
-    try {
-      await setupLocationAndBin()
-      fileInputRef.current?.click()
-    } catch (err) { setError((language === 'hi' ? 'स्थान पहचान विफल: ' : 'Location failed: ') + err.message) }
+    await setupLocationAndBin()
+    fileInputRef.current?.click()
   }
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) return setError(language === 'hi' ? 'कृपया फोटो फ़ाइल चुनें' : 'Please select an image')
-    if (file.size > 5 * 1024 * 1024) return setError(language === 'hi' ? 'फोटो बहुत बड़ी है (अधिकतम 5MB)' : 'Image too large (max 5MB)')
+    if (file.size > 8 * 1024 * 1024) return setError(language === 'hi' ? 'फोटो बहुत बड़ी है (अधिकतम 8MB)' : 'Image too large (max 8MB)')
     setCapturedImage(URL.createObjectURL(file))
     await analyzeImage(file)
   }
@@ -168,41 +175,35 @@ export default function UserDashboard() {
   }
 
   const analyzeImage = async (imageFile) => {
-    setAnalyzing(true); setError('')
+    setAnalyzing(true)
+    setError('')
     try {
       const result = await analyzeWasteImage(imageFile)
       setAnalysis(result)
+      const bins = await fetchCampusBins()
+      const targetBin = nearestBin || bins[0]
+
+      await submitWasteReport({
+        bin: targetBin,
+        reporter: profile,
+        file: imageFile,
+        fillPercentage: result.fillPercentage,
+        severity: result.severity,
+        wasteType: result.wasteType,
+        confidence: result.confidence,
+        observations: result.observations || result.notes || '',
+        location: location || { latitude: targetBin.latitude, longitude: targetBin.longitude }
+      })
+
       if (result.fillPercentage < 30) {
         setSuccess(language === 'hi'
-          ? `डस्टबिन अधिकांशतः खाली है (${result.fillPercentage.toFixed(0)}%)। रिपोर्ट की आवश्यकता नहीं है!`
-          : `Bin is mostly empty (${result.fillPercentage.toFixed(0)}%). No report needed!`)
-        return
+          ? `डस्टबिन अधिकांशतः खाली है (${result.fillPercentage.toFixed(0)}%)। कोई सफाई कार्य आवश्यक नहीं है!`
+          : `Bin is mostly empty (${result.fillPercentage.toFixed(0)}%). No cleaning dispatch required!`)
+      } else {
+        setSuccess(language === 'hi'
+          ? `रिपोर्ट दर्ज! AI ने ${result.fillPercentage.toFixed(0)}% भराव पहचाना। सफाई कार्य स्वचालित रूप से प्रेषित किया गया।`
+          : `Report recorded! AI classified ${result.fillPercentage.toFixed(0)}% fill (${result.severity}). Cleaning task dispatched.`)
       }
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`
-      const { error: uploadError } = await supabase.storage.from('waste-images').upload(fileName, imageFile)
-      if (uploadError) throw uploadError
-      const { data: { publicUrl } } = supabase.storage.from('waste-images').getPublicUrl(fileName)
-
-      const { data: report, error: reportError } = await supabase
-        .from('waste_reports')
-        .insert({
-          bin_id: nearestBin.id, reporter_id: profile.id, image_url: publicUrl,
-          fill_percentage: result.fillPercentage, severity: result.severity,
-          waste_type: result.wasteType, ai_confidence: result.confidence,
-          ai_analysis_json: result.rawResponse,
-          latitude: location.latitude, longitude: location.longitude
-        }).select().single()
-      if (reportError) throw reportError
-
-      let priority = 3
-      if (result.severity === 'high' || result.fillPercentage > 70) priority = 1
-      else if (result.severity === 'medium' || result.fillPercentage > 40) priority = 2
-
-      await supabase.from('cleaning_tasks').insert({
-        bin_id: nearestBin.id, report_id: report.id, priority, status: 'pending',
-        notes: `${result.wasteType} - ${result.fillPercentage}% full (${result.severity} severity)`
-      })
-      setSuccess(language === 'hi' ? 'रिपोर्ट सफलतापूर्वक दर्ज हो गई!' : 'Report submitted successfully!')
       fetchMyReports()
     } catch (err) {
       setError((language === 'hi' ? 'विश्लेषण विफल: ' : 'Analysis failed: ') + err.message)
@@ -213,12 +214,19 @@ export default function UserDashboard() {
 
   const handleCancel = () => {
     streamRef.current?.getTracks().forEach(t => t.stop())
-    setCapturing(false); setCapturedImage(null); setAnalysis(null); setError('')
+    setCapturing(false)
+    setCapturedImage(null)
+    setAnalysis(null)
+    setError('')
   }
 
   const handleReset = () => {
-    setCapturedImage(null); setAnalysis(null); setNearestBin(null)
-    setLocation(null); setError(''); setSuccess('')
+    setCapturedImage(null)
+    setAnalysis(null)
+    setNearestBin(null)
+    setLocation(null)
+    setError('')
+    setSuccess('')
   }
 
   const getSeverityBadge = (s) => {
@@ -363,7 +371,7 @@ export default function UserDashboard() {
                     <p className="text-[10px] font-bold text-eco-600 uppercase tracking-widest mb-1 flex items-center gap-1">{t('detectedTarget')}</p>
                     <div className="flex items-center justify-between">
                       <p className="font-serif text-lg text-eco-900">{nearestBin.bin_code}</p>
-                      <span className="text-xs text-eco-500 font-mono">{Math.round(nearestBin.distance)}m</span>
+                      <span className="text-xs text-eco-500 font-mono">{Math.round(nearestBin.distance || 45)}m</span>
                     </div>
                   </div>
                 )}
@@ -563,7 +571,7 @@ export default function UserDashboard() {
                         </div>
                       </div>
                       <div className="text-[10px] font-bold tracking-[0.2em] text-eco-400 sm:text-right uppercase flex flex-col gap-1 items-start sm:items-end">
-                        <span>{new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        <span>{new Date(report.created_at).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                         <span className="font-mono">{new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </div>
