@@ -15,7 +15,6 @@ function DashboardRouter() {
 
   if (!profile) return null
 
-  // Route based on user role
   if (profile.role === 'admin') {
     return <Navigate to="/admin" replace />
   } else if (profile.role === 'worker') {
