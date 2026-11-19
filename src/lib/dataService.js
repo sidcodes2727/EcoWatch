@@ -500,6 +500,16 @@ export const submitWasteReport = async ({
     setLocal('ecowatch_cached_tasks_v2', tasks)
   }
 
+  const pointsAwarded = fillPercentage > 70 ? 35 : 25
+  const gamification = awardStudentPoints(
+    reporter?.id || 'demo-user-id',
+    pointsAwarded,
+    'waste_report',
+    reporter?.full_name,
+    reporter?.department
+  )
+  newReport.gamification = gamification
+
   return newReport
 }
 
@@ -546,6 +556,15 @@ export const submitPinDemandRequest = async ({ location, notes, reporter }) => {
     bins: newPinBin
   })
   setLocal('ecowatch_cached_reports_v2', reports)
+
+  const gamification = awardStudentPoints(
+    reporter?.id || 'demo-user-id',
+    20,
+    'pin_request',
+    reporter?.full_name,
+    reporter?.department
+  )
+  newPinBin.gamification = gamification
 
   return newPinBin
 }
@@ -643,4 +662,181 @@ export const deployGhostBinRecord = async (ghost) => {
   setLocal('ecowatch_cached_bins_v2', bins)
 
   return newBin
+}
+
+export const DEFAULT_CAMPUS_LEADERBOARD = [
+  {
+    id: 'user-01',
+    full_name: 'Priya Sharma',
+    department: 'Computer Technology',
+    points: 340,
+    reports_count: 12,
+    streak_days: 5,
+    level: 3,
+    badge: 'Eco Champion'
+  },
+  {
+    id: 'demo-user-id',
+    full_name: 'Mohammed Mehdi Hedayati',
+    department: 'Information Technology',
+    points: 275,
+    reports_count: 9,
+    streak_days: 4,
+    level: 2,
+    badge: 'Green Guardian'
+  },
+  {
+    id: 'user-03',
+    full_name: 'Rohan Deshmukh',
+    department: 'Mechanical',
+    points: 230,
+    reports_count: 7,
+    streak_days: 3,
+    level: 2,
+    badge: 'Green Guardian'
+  },
+  {
+    id: 'user-04',
+    full_name: 'Ananya Iyer',
+    department: 'Civil',
+    points: 195,
+    reports_count: 6,
+    streak_days: 2,
+    level: 2,
+    badge: 'Campus Scout'
+  },
+  {
+    id: 'user-05',
+    full_name: 'Aryan Patil',
+    department: 'Electrical',
+    points: 160,
+    reports_count: 5,
+    streak_days: 3,
+    level: 2,
+    badge: 'Campus Scout'
+  },
+  {
+    id: 'user-06',
+    full_name: 'Tanvi Mehta',
+    department: 'Textile',
+    points: 125,
+    reports_count: 4,
+    streak_days: 1,
+    level: 2,
+    badge: 'Campus Scout'
+  },
+  {
+    id: 'user-07',
+    full_name: 'Siddharth Kulkarni',
+    department: 'Production',
+    points: 85,
+    reports_count: 3,
+    streak_days: 1,
+    level: 1,
+    badge: 'Novice Scout'
+  }
+]
+
+export const calculateStudentLevel = (points) => {
+  if (points >= 600) {
+    return { level: 4, title: 'Sustainability Hero', nextTarget: 1000, progressPercent: 100 }
+  }
+  if (points >= 300) {
+    return { level: 3, title: 'Eco Champion', nextTarget: 600, progressPercent: Math.min(Math.round(((points - 300) / 300) * 100), 100) }
+  }
+  if (points >= 100) {
+    return { level: 2, title: 'Green Guardian', nextTarget: 300, progressPercent: Math.min(Math.round(((points - 100) / 200) * 100), 100) }
+  }
+  return { level: 1, title: 'Campus Scout', nextTarget: 100, progressPercent: Math.min(Math.round((points / 100) * 100), 100) }
+}
+
+export const fetchStudentGamification = (userId, fullName = 'Mohammed Mehdi Hedayati', department = 'Information Technology') => {
+  const leaderboard = getLocal('ecowatch_leaderboard_v1', DEFAULT_CAMPUS_LEADERBOARD)
+  let student = leaderboard.find(s => s.id === userId || s.full_name === fullName)
+  if (!student) {
+    student = {
+      id: userId || 'demo-user-id',
+      full_name: fullName,
+      department: department || 'Information Technology',
+      points: 50,
+      reports_count: 1,
+      streak_days: 1,
+      level: 1,
+      badge: 'Campus Scout'
+    }
+    leaderboard.push(student)
+    setLocal('ecowatch_leaderboard_v1', leaderboard)
+  }
+  const sorted = [...leaderboard].sort((a, b) => b.points - a.points)
+  const rank = sorted.findIndex(s => s.id === student.id || s.full_name === student.full_name) + 1
+  const levelData = calculateStudentLevel(student.points)
+  return {
+    ...student,
+    rank,
+    ...levelData,
+    badges: [
+      { id: 'first_rep', name: 'First Action', earned: student.reports_count >= 1 },
+      { id: 'scout', name: 'Campus Scout', earned: student.points >= 50 },
+      { id: 'streak_3', name: '3-Day Streak', earned: student.streak_days >= 3 },
+      { id: 'champion', name: 'Eco Champion', earned: student.points >= 300 }
+    ]
+  }
+}
+
+export const awardStudentPoints = (userId, pointsAwarded, action = 'report', fullName = 'Mohammed Mehdi Hedayati', department = 'Information Technology') => {
+  const leaderboard = getLocal('ecowatch_leaderboard_v1', DEFAULT_CAMPUS_LEADERBOARD)
+  let student = leaderboard.find(s => s.id === userId || s.full_name === fullName)
+  if (!student) {
+    student = {
+      id: userId || 'demo-user-id',
+      full_name: fullName,
+      department: department || 'Information Technology',
+      points: 50,
+      reports_count: 0,
+      streak_days: 1,
+      level: 1,
+      badge: 'Campus Scout'
+    }
+    leaderboard.push(student)
+  }
+  student.points = (student.points || 0) + pointsAwarded
+  student.reports_count = (student.reports_count || 0) + 1
+  const levelData = calculateStudentLevel(student.points)
+  student.level = levelData.level
+  student.badge = levelData.title
+  setLocal('ecowatch_leaderboard_v1', leaderboard)
+
+  const sorted = [...leaderboard].sort((a, b) => b.points - a.points)
+  const rank = sorted.findIndex(s => s.id === student.id || s.full_name === student.full_name) + 1
+
+  return {
+    pointsAwarded,
+    newBalance: student.points,
+    rank,
+    ...levelData,
+    action
+  }
+}
+
+export const fetchCampusLeaderboard = () => {
+  const leaderboard = getLocal('ecowatch_leaderboard_v1', DEFAULT_CAMPUS_LEADERBOARD)
+  const sortedStudents = [...leaderboard].sort((a, b) => b.points - a.points)
+
+  const deptMap = {}
+  sortedStudents.forEach(st => {
+    const dept = st.department || 'General'
+    if (!deptMap[dept]) {
+      deptMap[dept] = { department: dept, totalPoints: 0, totalReports: 0, studentCount: 0 }
+    }
+    deptMap[dept].totalPoints += st.points
+    deptMap[dept].totalReports += st.reports_count
+    deptMap[dept].studentCount += 1
+  })
+
+  const sortedDepartments = Object.values(deptMap).sort((a, b) => b.totalPoints - a.totalPoints)
+
+  return {
+    students: sortedStudents,
+    departments: sortedDepartments
+  }
 }
